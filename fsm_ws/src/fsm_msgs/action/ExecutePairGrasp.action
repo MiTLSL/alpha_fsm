@@ -1,0 +1,12 @@
+fsm_msgs/GraspPair grasp_pair
+float32 timeout_sec
+bool dry_run
+---
+bool success
+fsm_msgs/PairGraspResult result
+---
+string current_state
+string current_stage
+float32 progress_percent
+float32 vacuum_left_kpa
+float32 vacuum_right_kpa

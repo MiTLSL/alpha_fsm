@@ -1,0 +1,7 @@
+string goal_type
+geometry_msgs/PoseStamped target_pose
+geometry_msgs/PoseStamped wall_frame_pose
+uint8 phase
+float32 desired_distance_to_wall
+float32 desired_yaw_to_wall
+float32 desired_lateral_offset

@@ -1,0 +1,23 @@
+string goal_type
+geometry_msgs/PoseStamped target_pose
+geometry_msgs/PoseStamped wall_frame_pose
+uint8 phase
+float32 desired_distance_to_wall
+float32 desired_yaw_to_wall
+float32 desired_lateral_offset
+bool require_fine_alignment
+float32 timeout_sec
+---
+bool success
+geometry_msgs/PoseStamped actual_base_pose
+float32 position_error
+float32 yaw_error
+float32 alignment_error
+bool workpose_valid
+uint16 error_code
+string failure_reason
+---
+string current_state
+float32 distance_remaining
+float32 estimated_time_remaining
+float32 alignment_error_current

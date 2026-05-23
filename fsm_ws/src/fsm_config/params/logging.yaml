@@ -1,0 +1,43 @@
+# version: 1.0.0
+# last_updated: 2026-05-23
+/**:
+  ros__parameters:
+    logging:
+      root_dir: "/var/log/blue_sword_fsm"
+      filename_pattern: "{node_name}_{date}.jsonl"
+      date_format: "%Y%m%d"
+
+      rotation:
+        max_size_mb: 100
+        backup_count: 10
+        rotate_at_midnight: true
+
+      buffering:
+        flush_interval_sec: 1
+        queue_size: 10000
+
+      required_fields:
+        - ts
+        - node
+        - fsm
+        - task_id
+        - event
+        - state
+
+      enabled_events:
+        - state_enter
+        - state_exit
+        - transition
+        - error
+        - metric
+        - task_summary
+
+      ctx_snapshot_fields:
+        - task_id
+        - wall_index
+        - phase
+        - state
+        - error_code
+
+      mirror_to_topic: "/fsm/log_event"
+      mirror_qos: "fsm_log"

@@ -1,0 +1,10 @@
+uint8 RELEASE_ESTOP=1
+uint8 RESET_FAULT=2
+uint8 ENABLE_CHASSIS=3
+
+uint8 command
+---
+bool success
+uint8 stage_reached
+uint16 error_code
+string message

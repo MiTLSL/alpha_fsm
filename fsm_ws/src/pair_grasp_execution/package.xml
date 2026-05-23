@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>pair_grasp_execution</name>
+  <version>1.0.0</version>
+  <description>Pair grasp execution FSM adapter node skeleton.</description>
+  <maintainer email="dev@sevnova.local">sevnova_fsm</maintainer>
+  <license>Proprietary</license>
+  <buildtool_depend>ament_python</buildtool_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>fsm_core</exec_depend>
+  <exec_depend>fsm_msgs</exec_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

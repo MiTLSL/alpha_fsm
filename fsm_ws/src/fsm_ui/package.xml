@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>fsm_ui</name>
+  <version>1.0.0</version>
+  <description>FSM UI package placeholder for P2.</description>
+  <maintainer email="dev@sevnova.local">sevnova_fsm</maintainer>
+  <license>Proprietary</license>
+  <buildtool_depend>ament_python</buildtool_depend>
+  <exec_depend>rclpy</exec_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

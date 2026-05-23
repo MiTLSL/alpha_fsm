@@ -1,0 +1,125 @@
+# version: 1.0.0
+# last_updated: 2026-05-23
+# changelog:
+#   1.0.0 初版，占位值用于 M0/M1 mock。
+/**:
+  ros__parameters:
+    business:
+      box_size:
+        length: 0.40
+        width: 0.40
+        height: 0.40
+
+      grid_shape:
+        rows: 5
+        cols: 5
+
+      left_phase_cols: [0, 1, 2]
+      right_phase_cols: [3, 4]
+
+      match_tolerance:
+        y: 0.15
+        z: 0.15
+
+      empty_confirm_frames: 5
+      empty_confirm_window_sec: 3.0
+      max_retry_per_slot: 3
+      allow_single_arm_grasp: true
+
+      observation_pose:
+        x: 0.0
+        y: 0.0
+        z: 0.0
+        yaw: 0.0
+
+      left_phase_workpose:
+        x: 0.0
+        y: 0.30
+        z: 0.0
+        yaw: 0.0
+
+      right_phase_workpose:
+        x: 0.0
+        y: -0.30
+        z: 0.0
+        yaw: 0.0
+
+      desired_distance_to_wall: 0.60
+      desired_yaw_to_wall: 0.0
+      fine_alignment_tolerance:
+        position: 0.02
+        yaw: 0.02
+
+      fixed_place_pose:
+        x: 0.50
+        y: 0.0
+        z: 0.80
+        qx: 0.0
+        qy: 0.0
+        qz: 0.0
+        qw: 1.0
+
+      left_arm_workspace:
+        x_min: 0.30
+        x_max: 0.90
+        y_min: -0.10
+        y_max: 0.60
+        z_min: 0.30
+        z_max: 1.80
+
+      right_arm_workspace:
+        x_min: 0.30
+        x_max: 0.90
+        y_min: -0.60
+        y_max: 0.10
+        z_min: 0.30
+        z_max: 1.80
+
+      mapping_window:
+        frames: 10
+        timeout_sec: 3.0
+        min_valid_detections: 8
+
+      local_window:
+        frames: 5
+        timeout_sec: 1.5
+
+      detection_filter:
+        confidence_min: 0.5
+        size_tolerance: 0.10
+        class_label: "box"
+
+      perception_adapter:
+        publish_rate_hz: 10.0
+        camera_timeout_ms: 500
+        lidar_timeout_ms: 500
+        result_timeout_ms: 1000
+        tf_timeout_ms: 200
+        min_face_inlier_count: 20
+
+      fine_alignment:
+        timeout_sec: 15.0
+        retry_limit: 1
+        pass_frames: 5
+        dist_tolerance: 0.02
+        yaw_tolerance: 0.05
+        max_linear_x: 0.05
+        max_angular_z: 0.20
+        feedback_timeout_ms: 1000
+
+      vacuum:
+        attach_threshold_kpa: -50.0
+        hold_ms: 150
+        buildup_timeout_ms: 800
+        sensor_timeout_ms: 200
+        pressure_publish_rate_hz: 20.0
+        mock_buildup_time_ms: 150
+        mock_release_time_ms: 100
+        hold_on_estop: true
+        release_on_cancel: false
+
+      max_walls: 0
+      max_task_duration_sec: 1800
+      dual_arm_min_y_separation: 0.05
+      dual_arm_min_xz_aabb_clear: 0.05
+      arm_assign_ambiguous_y_diff: 0.05

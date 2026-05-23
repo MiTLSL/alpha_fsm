@@ -1,0 +1,94 @@
+# version: 1.0.0
+# last_updated: 2026-05-23
+/**:
+  ros__parameters:
+    interfaces:
+      topics:
+        fsm_system_state: "/fsm/system_state"
+        fsm_task_state: "/fsm/task_state"
+        fsm_wall_destacking_state: "/fsm/wall_destacking_state"
+        fsm_active_substate: "/fsm/active_substate"
+        fsm_grid_snapshot: "/fsm/grid_snapshot"
+        fsm_grasp_pair: "/fsm/grasp_pair"
+        fsm_error: "/fsm/error"
+        fsm_log_event: "/fsm/log_event"
+        nav_health: "/fsm/nav_health"
+        perception_detections: "/perception/box_detections"
+        perception_health: "/perception/health"
+        box_perception_result: "/box_perception/result"
+        camera_image_raw: "/camera/camera/color/image_raw"
+        camera_info: "/camera/camera_info"
+        cloud_registered_body: "/cloud_registered_body"
+        safety_status: "/safety/status"
+        safety_estop: "/safety/estop"
+        estop_button: "/estop_button"
+        vacuum_cmd: "/vacuum/cmd"
+        vacuum_pressure_raw: "/vacuum/pressure_raw"
+        vacuum_pressure: "/vacuum/pressure"
+        vacuum_health: "/vacuum/health"
+        io_state: "/io/state"
+        cmd_vel_align: "/cmd_vel_align"
+        estop: "/estop"
+        tf: "/tf"
+        tf_static: "/tf_static"
+
+      services:
+        task_start: "/task/start"
+        task_pause: "/task/pause"
+        task_resume: "/task/resume"
+        task_cancel: "/task/cancel"
+        clear_error: "/clear_error"
+        safety_sw_estop: "/safety/sw_estop"
+        nav_base_recovery: "/nav/base_recovery"
+        reload_config: "/reload_config"
+
+      actions:
+        run_wall_destacking: "/run_wall_destacking"
+        navigate_to_pose: "/navigate_to_pose"
+        execute_pair_grasp: "/execute_pair_grasp"
+
+      frames:
+        map: "map"
+        odom: "odom"
+        base_link: "base_link"
+        body: "body"
+        camera_init: "camera_init"
+        d2_base_link: "2d_base_link"
+        d2_body: "2d_body"
+        camera_link: "camera_link"
+        left_tcp: "left_tcp"
+        right_tcp: "right_tcp"
+        wall_prefix: "wall_"
+        container: "container_frame"
+
+      qos:
+        fsm_state:
+          reliability: "RELIABLE"
+          durability: "TRANSIENT_LOCAL"
+          history: "KEEP_LAST"
+          depth: 1
+        fsm_log:
+          reliability: "BEST_EFFORT"
+          durability: "VOLATILE"
+          history: "KEEP_LAST"
+          depth: 200
+        perception_detections:
+          reliability: "BEST_EFFORT"
+          durability: "VOLATILE"
+          history: "KEEP_LAST"
+          depth: 5
+        perception_health:
+          reliability: "RELIABLE"
+          durability: "TRANSIENT_LOCAL"
+          history: "KEEP_LAST"
+          depth: 1
+        safety_status:
+          reliability: "RELIABLE"
+          durability: "TRANSIENT_LOCAL"
+          history: "KEEP_LAST"
+          depth: 1
+        safety_estop:
+          reliability: "RELIABLE"
+          durability: "TRANSIENT_LOCAL"
+          history: "KEEP_LAST"
+          depth: 1

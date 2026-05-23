@@ -1,0 +1,13 @@
+uint8 STAGE_NONE=0
+uint8 STAGE_ESTOP_RELEASED=1
+uint8 STAGE_ACTIONS_CANCELED=2
+uint8 STAGE_FAULT_RESET=3
+uint8 STAGE_CHASSIS_ENABLED=4
+uint8 STAGE_SELF_CHECK=5
+
+uint16 error_code
+string reason
+---
+bool cleared
+string message
+uint8 stage_reached

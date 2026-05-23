@@ -1,0 +1,10 @@
+std_msgs/Header header
+uint16 error_code
+uint8 level
+uint8 source
+string source_node
+string source_fsm
+string source_state
+string message
+string recommended_recovery
+string extra_json

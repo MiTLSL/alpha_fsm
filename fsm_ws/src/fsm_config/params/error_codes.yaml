@@ -1,0 +1,11 @@
+# version: 1.0.0
+# last_updated: 2026-05-23
+/**:
+  ros__parameters:
+    error_codes:
+      overrides: {}
+      silenced: []
+      recovery_max_attempts: {}
+      escalate_to_fatal:
+        "5102": 5
+        "4022": 3

@@ -1,0 +1,7 @@
+bool success
+geometry_msgs/PoseStamped actual_base_pose
+float32 position_error
+float32 yaw_error
+float32 alignment_error
+bool workpose_valid
+uint16 error_code
