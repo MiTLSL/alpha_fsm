@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import asyncio
-
 from .common import FailureInjectionMixin, make_pose_stamped
 
 
@@ -29,6 +27,19 @@ class MockNavigationManagerMixin(FailureInjectionMixin):
         msg = Bool()
         msg.data = self._current_failure not in ("LOCALIZATION_LOST", "LIFECYCLE_INACTIVE")
         self._nav_health_pub.publish(msg)
+
+    async def _sleep(self, duration_sec: float) -> None:
+        from rclpy.task import Future
+
+        future = Future()
+
+        def wake():
+            timer.cancel()
+            if not future.done():
+                future.set_result(None)
+
+        timer = self.create_timer(float(duration_sec), wake)
+        await future
 
     async def execute_navigation_goal(self, goal_handle):
         from fsm_core.error_code import ErrorCode
@@ -73,7 +84,7 @@ class MockNavigationManagerMixin(FailureInjectionMixin):
             feedback.estimated_time_remaining = 0.1
             feedback.alignment_error_current = 0.01 if state == "FINE_ALIGN" else float("nan")
             goal_handle.publish_feedback(feedback)
-            await asyncio.sleep(delay_sec)
+            await self._sleep(delay_sec)
             if goal_handle.is_cancel_requested:
                 goal_handle.canceled()
                 result.success = False
@@ -102,7 +113,7 @@ class MockNavigationManagerMixin(FailureInjectionMixin):
         }
         if self._current_failure in failure_map:
             if self._current_failure == "GOAL_TIMEOUT":
-                await asyncio.sleep(min(float(goal_handle.request.timeout_sec or 0.5), 2.0))
+                await self._sleep(min(float(goal_handle.request.timeout_sec or 0.5), 2.0))
             goal_handle.abort()
             result.success = False
             result.workpose_valid = False
@@ -122,15 +133,16 @@ class MockNavigationManagerMixin(FailureInjectionMixin):
             request.RESET_FAULT: ClearErrorStage.FAULT_RESET,
             request.ENABLE_CHASSIS: ClearErrorStage.CHASSIS_ENABLED,
         }
-        error_by_failure = {
-            "ESTOP_LOCK_STUCK": ErrorCode.E_SAFETY_ESTOP_LOCK_STUCK,
-            "CHASSIS_FAULT_RESET_FAIL": ErrorCode.E_CHASSIS_FAULT_RESET_FAIL,
-            "CHASSIS_ENABLE_FAIL": ErrorCode.E_CHASSIS_ENABLE_FAIL,
+        failure_by_command = {
+            request.RELEASE_ESTOP: ("ESTOP_LOCK_STUCK", ErrorCode.E_SAFETY_ESTOP_LOCK_STUCK),
+            request.RESET_FAULT: ("CHASSIS_FAULT_RESET_FAIL", ErrorCode.E_CHASSIS_FAULT_RESET_FAIL),
+            request.ENABLE_CHASSIS: ("CHASSIS_ENABLE_FAIL", ErrorCode.E_CHASSIS_ENABLE_FAIL),
         }
         response.stage_reached = int(stage_by_command.get(request.command, ClearErrorStage.NONE))
-        if self._current_failure in error_by_failure:
+        expected_failure, error_code = failure_by_command.get(request.command, ("", ErrorCode.NO_ERROR))
+        if self._current_failure == expected_failure:
             response.success = False
-            response.error_code = int(error_by_failure[self._current_failure])
+            response.error_code = int(error_code)
             response.message = self._current_failure
         else:
             response.success = True

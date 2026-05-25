@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import selectors
 import signal
 import subprocess
 import sys
@@ -14,7 +15,7 @@ WS = ROOT / "fsm_ws"
 
 READY_MARKERS = (
     "safety_monitor_node skeleton ready",
-    "task_manager_node skeleton ready",
+    "task_manager_node ready",
     "wall_destacking_strategy_node skeleton ready",
     "mock_safety_button ready",
     "mock_perception_adapter_node ready",
@@ -43,16 +44,20 @@ def main() -> int:
         preexec_fn=os.setsid,
     )
     output: list[str] = []
+    selector = selectors.DefaultSelector()
+    if proc.stdout:
+        selector.register(proc.stdout, selectors.EVENT_READ)
     deadline = time.monotonic() + 15.0
     try:
         while time.monotonic() < deadline:
-            line = proc.stdout.readline() if proc.stdout else ""
-            if line:
-                output.append(line)
-                combined = "".join(output)
-                if all(marker in combined for marker in READY_MARKERS):
-                    print("M1 mock bringup smoke passed")
-                    return 0
+            for key, _ in selector.select(timeout=0.1):
+                line = key.fileobj.readline()
+                if line:
+                    output.append(line)
+                    combined = "".join(output)
+                    if all(marker in combined for marker in READY_MARKERS):
+                        print("M1 mock bringup smoke passed")
+                        return 0
             if proc.poll() is not None:
                 break
         print("M1 mock bringup smoke failed", file=sys.stderr)

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import asyncio
-
 from .common import FailureInjectionMixin, make_pose_stamped
 
 
@@ -44,6 +42,19 @@ class MockPairGraspExecutionMixin(FailureInjectionMixin):
         msg = Float32MultiArray()
         msg.data = [float(self._vacuum_left_kpa), float(self._vacuum_right_kpa)]
         self._vacuum_pressure_pub.publish(msg)
+
+    async def _sleep(self, duration_sec: float) -> None:
+        from rclpy.task import Future
+
+        future = Future()
+
+        def wake():
+            timer.cancel()
+            if not future.done():
+                future.set_result(None)
+
+        timer = self.create_timer(float(duration_sec), wake)
+        await future
 
     async def execute_pair_grasp_goal(self, goal_handle):
         from fsm_core.error_code import ErrorCode
@@ -90,7 +101,7 @@ class MockPairGraspExecutionMixin(FailureInjectionMixin):
             feedback.vacuum_left_kpa = 0.0 if goal_handle.request.dry_run else self._vacuum_left_kpa
             feedback.vacuum_right_kpa = 0.0 if goal_handle.request.dry_run else self._vacuum_right_kpa
             goal_handle.publish_feedback(feedback)
-            await asyncio.sleep(0.05)
+            await self._sleep(0.05)
             if goal_handle.is_cancel_requested:
                 if self._release_on_cancel:
                     self.publish_vacuum_command(False, False)
@@ -123,7 +134,7 @@ class MockPairGraspExecutionMixin(FailureInjectionMixin):
         }
         if self._current_failure in failure_map:
             if self._current_failure == "TIMEOUT":
-                await asyncio.sleep(min(float(goal_handle.request.timeout_sec or 0.5), 2.0))
+                await self._sleep(min(float(goal_handle.request.timeout_sec or 0.5), 2.0))
             goal_handle.abort()
             return self._make_result(
                 goal_handle,
