@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from .common import FailureInjectionMixin, json_details, make_pose_stamped
 
 
@@ -11,6 +13,27 @@ class MockPerceptionAdapterMixin(FailureInjectionMixin):
         if self._mode not in self.VALID_MODES:
             self.get_logger().warning(f"unsupported mock perception mode {self._mode}, fallback to OBSERVATION")
             self._mode = "OBSERVATION"
+
+    def handle_inject_failure(self, request, response):
+        response = super().handle_inject_failure(request, response)
+        if not request.params_json:
+            return response
+        try:
+            params = json.loads(request.params_json)
+        except json.JSONDecodeError as exc:
+            response.accepted = False
+            response.message = f"invalid params_json: {exc}"
+            return response
+        mode = str(params.get("mode", "")).strip()
+        if not mode:
+            return response
+        if mode not in self.VALID_MODES:
+            response.accepted = False
+            response.message = f"unsupported mode: {mode}"
+            return response
+        self._mode = mode
+        response.message = f"{response.message}; mode set to {self._mode}"
+        return response
 
     def publish_mock_data(self):
         self.publish_health()

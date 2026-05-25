@@ -317,8 +317,19 @@ class TaskManagerNodeMixin:
             self._set_system_state(SYSTEM_FAULT)
 
     def _cancel_task(self) -> None:
-        if self.ctx.wall_destacking_goal_handle is not None:
-            self._cancel_wall_destacking_goal()
+        from action_msgs.msg import GoalStatus
+
+        self._cancel_wall_destacking_goal()
+        if self._wall_destacking_cancel_in_progress():
+            return
+        result_future = self.ctx.wall_destacking_result_future
+        if result_future is not None and not result_future.done():
+            return
+        if result_future is not None and result_future.done():
+            result_wrapper = result_future.result()
+            self.ctx.wall_destacking_result = result_wrapper.result
+            if result_wrapper.status not in (GoalStatus.STATUS_CANCELED, GoalStatus.STATUS_ABORTED):
+                self.get_logger().warning(f"task cancel finished with strategy status={result_wrapper.status}")
         self.ctx.cancel_requested = False
         self.ctx.pause_requested = False
         self._set_error(ErrorCode.E_MAN_CANCELLED, "task cancelled")
@@ -352,10 +363,20 @@ class TaskManagerNodeMixin:
         handle = self.ctx.wall_destacking_goal_handle
         if handle is None:
             return
+        result_future = self.ctx.wall_destacking_result_future
+        if result_future is not None and result_future.done():
+            return
+        cancel_future = self.ctx.wall_destacking_cancel_future
+        if cancel_future is not None and not cancel_future.done():
+            return
         try:
-            handle.cancel_goal_async()
+            self.ctx.wall_destacking_cancel_future = handle.cancel_goal_async()
         except Exception as exc:  # pragma: no cover - ROS2 防御兜底
             self.get_logger().warning(f"failed to cancel wall destacking goal: {exc}")
+
+    def _wall_destacking_cancel_in_progress(self) -> bool:
+        future = self.ctx.wall_destacking_cancel_future
+        return bool(future is not None and not future.done())
 
     def _run_clear_error_protocol(self) -> tuple[bool, int, str]:
         from fsm_msgs.srv import BaseRecoveryCommand
@@ -412,6 +433,7 @@ class TaskManagerNodeMixin:
         while time.monotonic() < deadline:
             goal_future = self.ctx.wall_destacking_goal_future
             result_future = self.ctx.wall_destacking_result_future
+            cancel_future = self.ctx.wall_destacking_cancel_future
             if goal_future is not None and not goal_future.done():
                 time.sleep(0.01)
                 self._adopt_wall_destacking_goal_if_ready()
@@ -419,6 +441,9 @@ class TaskManagerNodeMixin:
             self._adopt_wall_destacking_goal_if_ready()
             if self.ctx.wall_destacking_goal_handle is None:
                 return True
+            if cancel_future is not None and not cancel_future.done():
+                time.sleep(0.01)
+                continue
             if result_future is not None and result_future.done():
                 return True
             time.sleep(0.01)
@@ -536,6 +561,7 @@ class TaskManagerNodeMixin:
         self.ctx.wall_destacking_goal_handle = None
         self.ctx.wall_destacking_goal_future = None
         self.ctx.wall_destacking_result_future = None
+        self.ctx.wall_destacking_cancel_future = None
         self.ctx.wall_destacking_result = None
         self.ctx.pending_start = None
         if clear_identity:

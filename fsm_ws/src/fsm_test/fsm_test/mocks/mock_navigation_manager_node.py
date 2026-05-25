@@ -4,6 +4,13 @@ from .common import FailureInjectionMixin, make_pose_stamped
 
 
 class MockNavigationManagerMixin(FailureInjectionMixin):
+    def _set_mock_state(self, state: str, extra: str = "{}") -> None:
+        if state == "ESTOP" and getattr(self, "_ready_state", "") in ("CANCEL_REQUESTED", "CANCELLED", "ESTOP_ABORT"):
+            return
+        self._ready_state = state
+        self._mock_state_extra_json = extra
+        self.publish_state_heartbeat()
+
     def handle_goal(self, goal_request):
         del goal_request
         from rclpy.action import GoalResponse
@@ -16,10 +23,13 @@ class MockNavigationManagerMixin(FailureInjectionMixin):
         del goal_handle
         from rclpy.action import CancelResponse
 
+        self._set_mock_state("CANCEL_REQUESTED")
         return CancelResponse.ACCEPT
 
     def on_estop(self, msg):
         self._estop = bool(msg.data)
+        if self._estop:
+            self._set_mock_state("ESTOP")
 
     def publish_nav_health(self):
         from std_msgs.msg import Bool
@@ -79,6 +89,7 @@ class MockNavigationManagerMixin(FailureInjectionMixin):
         result.failure_reason = ""
 
         for state in stages:
+            self._set_mock_state(state)
             feedback.current_state = state
             feedback.distance_remaining = 0.0 if state in ("VERIFY", "REPORT") else 0.2
             feedback.estimated_time_remaining = 0.1
@@ -86,6 +97,7 @@ class MockNavigationManagerMixin(FailureInjectionMixin):
             goal_handle.publish_feedback(feedback)
             await self._sleep(delay_sec)
             if goal_handle.is_cancel_requested:
+                self._set_mock_state("CANCELLED")
                 goal_handle.canceled()
                 result.success = False
                 result.workpose_valid = False
@@ -93,6 +105,7 @@ class MockNavigationManagerMixin(FailureInjectionMixin):
                 result.failure_reason = "cancelled"
                 return result
             if self._estop:
+                self._set_mock_state("ESTOP_ABORT")
                 goal_handle.abort()
                 result.success = False
                 result.workpose_valid = False
@@ -115,12 +128,14 @@ class MockNavigationManagerMixin(FailureInjectionMixin):
             if self._current_failure == "GOAL_TIMEOUT":
                 await self._sleep(min(float(goal_handle.request.timeout_sec or 0.5), 2.0))
             goal_handle.abort()
+            self._set_mock_state("FAILED", f'{{"failure":"{self._current_failure}","error_code":{int(failure_map[self._current_failure])}}}')
             result.success = False
             result.workpose_valid = False
             result.error_code = int(failure_map[self._current_failure])
             result.failure_reason = self._current_failure
         else:
             goal_handle.succeed()
+            self._set_mock_state("REPORT")
             result.success = True
         return result
 
@@ -172,6 +187,7 @@ def main(args=None):
             self.create_state_heartbeat("fsm_active_substate", "/fsm/active_substate", "MockNavigationManager")
             self.init_failure_injection()
             self._estop = False
+            self._mock_state_extra_json = "{}"
             self._action_server = ActionServer(
                 self,
                 NavigateToPose,

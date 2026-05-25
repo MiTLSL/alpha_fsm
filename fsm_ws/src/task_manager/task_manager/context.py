@@ -22,6 +22,7 @@ class TaskContext:
     wall_destacking_goal_handle: Any = None
     wall_destacking_goal_future: Any = None
     wall_destacking_result_future: Any = None
+    wall_destacking_cancel_future: Any = None
     wall_destacking_result: Any = None
     wall_index: int = 0
     phase: int = 0

@@ -4,6 +4,13 @@ from .common import FailureInjectionMixin, make_pose_stamped
 
 
 class MockPairGraspExecutionMixin(FailureInjectionMixin):
+    def _set_mock_state(self, state: str, extra: str = "{}") -> None:
+        if state == "ESTOP" and getattr(self, "_ready_state", "") in ("CANCEL_REQUESTED", "CANCELLED", "ESTOP_ABORT"):
+            return
+        self._ready_state = state
+        self._mock_state_extra_json = extra
+        self.publish_state_heartbeat()
+
     def handle_goal(self, goal_request):
         del goal_request
         from rclpy.action import GoalResponse
@@ -16,10 +23,13 @@ class MockPairGraspExecutionMixin(FailureInjectionMixin):
         del goal_handle
         from rclpy.action import CancelResponse
 
+        self._set_mock_state("CANCEL_REQUESTED")
         return CancelResponse.ACCEPT
 
     def on_estop(self, msg):
         self._estop = bool(msg.data)
+        if self._estop:
+            self._set_mock_state("ESTOP")
 
     def on_pressure_raw(self, msg):
         if len(msg.data) >= 2:
@@ -43,6 +53,23 @@ class MockPairGraspExecutionMixin(FailureInjectionMixin):
         msg.data = [float(self._vacuum_left_kpa), float(self._vacuum_right_kpa)]
         self._vacuum_pressure_pub.publish(msg)
 
+    def _active_arms(self, grasp_pair):
+        left_active = grasp_pair.grasp_mode in (
+            grasp_pair.MODE_DUAL,
+            grasp_pair.MODE_LEFT_ONLY,
+        )
+        right_active = grasp_pair.grasp_mode in (
+            grasp_pair.MODE_DUAL,
+            grasp_pair.MODE_RIGHT_ONLY,
+        )
+        return bool(left_active), bool(right_active)
+
+    def _vacuum_attached(self, grasp_pair) -> bool:
+        left_active, right_active = self._active_arms(grasp_pair)
+        left_ok = (not left_active) or float(self._vacuum_left_kpa) <= float(self._attach_threshold_kpa)
+        right_ok = (not right_active) or float(self._vacuum_right_kpa) <= float(self._attach_threshold_kpa)
+        return bool(left_ok and right_ok)
+
     async def _sleep(self, duration_sec: float) -> None:
         from rclpy.task import Future
 
@@ -55,6 +82,26 @@ class MockPairGraspExecutionMixin(FailureInjectionMixin):
 
         timer = self.create_timer(float(duration_sec), wake)
         await future
+
+    async def _wait_for_vacuum_threshold(self, goal_handle) -> bool:
+        from fsm_msgs.action import ExecutePairGrasp
+
+        deadline = self.get_clock().now().nanoseconds / 1e9 + float(self._buildup_timeout_sec)
+        while self.get_clock().now().nanoseconds / 1e9 < deadline:
+            if goal_handle.is_cancel_requested or self._estop:
+                return False
+            feedback = ExecutePairGrasp.Feedback()
+            feedback.current_state = "CHECK_VACUUM"
+            feedback.current_stage = "VACUUM"
+            feedback.progress_percent = 40.0
+            feedback.vacuum_left_kpa = float(self._vacuum_left_kpa)
+            feedback.vacuum_right_kpa = float(self._vacuum_right_kpa)
+            goal_handle.publish_feedback(feedback)
+            if self._vacuum_attached(goal_handle.request.grasp_pair):
+                await self._sleep(min(float(self._hold_sec), 0.05))
+                return True
+            await self._sleep(0.05)
+        return False
 
     async def execute_pair_grasp_goal(self, goal_handle):
         from fsm_core.error_code import ErrorCode
@@ -94,7 +141,9 @@ class MockPairGraspExecutionMixin(FailureInjectionMixin):
             self.publish_vacuum_command(True, True)
 
         failed_stage = ""
+        vacuum_failure_code = 0
         for index, (state, stage) in enumerate(stages):
+            self._set_mock_state(state)
             feedback.current_state = state
             feedback.current_stage = stage
             feedback.progress_percent = float(index * 100 / max(len(stages) - 1, 1))
@@ -103,11 +152,13 @@ class MockPairGraspExecutionMixin(FailureInjectionMixin):
             goal_handle.publish_feedback(feedback)
             await self._sleep(0.05)
             if goal_handle.is_cancel_requested:
+                self._set_mock_state("CANCELLED")
                 if self._release_on_cancel:
                     self.publish_vacuum_command(False, False)
                 goal_handle.canceled()
                 return self._make_result(goal_handle, success=False, result_code_name="CANCELLED", error_code=0, failed_stage="CANCEL")
             if self._estop:
+                self._set_mock_state("ESTOP_ABORT")
                 if not self._hold_on_estop:
                     self.publish_vacuum_command(False, False)
                 goal_handle.abort()
@@ -115,9 +166,25 @@ class MockPairGraspExecutionMixin(FailureInjectionMixin):
             if failure_stage.get(self._current_failure) == state:
                 failed_stage = stage
                 break
+            if state == "CHECK_VACUUM" and not goal_handle.request.dry_run:
+                if not await self._wait_for_vacuum_threshold(goal_handle):
+                    failed_stage = stage
+                    vacuum_failure_code = int(ErrorCode.E_VAC_NOT_REACHED)
+                    break
 
-        if not goal_handle.request.dry_run and not failed_stage:
+        if not goal_handle.request.dry_run and (not failed_stage or vacuum_failure_code):
             self.publish_vacuum_command(False, False)
+
+        if vacuum_failure_code:
+            goal_handle.abort()
+            self._set_mock_state("FAILED", f'{{"error_code":{int(vacuum_failure_code)}}}')
+            return self._make_result(
+                goal_handle,
+                success=False,
+                result_code_name="FAILED_BOTH",
+                error_code=int(vacuum_failure_code),
+                failed_stage=failed_stage or "VACUUM",
+            )
 
         failure_map = {
             "GOAL_REJECTED": ErrorCode.E_GRASP_GOAL_REJECTED,
@@ -136,6 +203,7 @@ class MockPairGraspExecutionMixin(FailureInjectionMixin):
             if self._current_failure == "TIMEOUT":
                 await self._sleep(min(float(goal_handle.request.timeout_sec or 0.5), 2.0))
             goal_handle.abort()
+            self._set_mock_state("FAILED", f'{{"failure":"{self._current_failure}","error_code":{int(failure_map[self._current_failure])}}}')
             return self._make_result(
                 goal_handle,
                 success=False,
@@ -145,6 +213,7 @@ class MockPairGraspExecutionMixin(FailureInjectionMixin):
             )
 
         goal_handle.succeed()
+        self._set_mock_state("REPORT")
         return self._make_result(goal_handle, success=True, result_code_name="SUCCESS_BOTH", error_code=0, failed_stage="")
 
     def _make_result(self, goal_handle, success: bool, result_code_name: str, error_code: int, failed_stage: str):
@@ -195,8 +264,12 @@ def main(args=None):
             self._estop = False
             self._vacuum_left_kpa = 0.0
             self._vacuum_right_kpa = 0.0
+            self._mock_state_extra_json = "{}"
             self._hold_on_estop = bool(self.config.get("business.vacuum.hold_on_estop", True))
             self._release_on_cancel = bool(self.config.get("business.vacuum.release_on_cancel", False))
+            self._attach_threshold_kpa = float(self.config.get("business.vacuum.attach_threshold_kpa", -50.0))
+            self._buildup_timeout_sec = float(self.config.get("business.vacuum.buildup_timeout_ms", 800.0)) / 1000.0
+            self._hold_sec = float(self.config.get("business.vacuum.hold_ms", 150.0)) / 1000.0
             self._action_server = ActionServer(
                 self,
                 ExecutePairGrasp,

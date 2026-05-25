@@ -20,7 +20,7 @@ class WallDestackingStrategyNodeMixin:
     def _init_strategy_runtime(self) -> None:
         from fsm_core.ros2_helpers import get_action_name, get_topic_name, make_qos_profile
         from fsm_msgs.action import ExecutePairGrasp, NavigateToPose
-        from fsm_msgs.msg import GraspPair, WallGridSnapshot
+        from fsm_msgs.msg import FsmStateSnapshot, GraspPair, WallGridSnapshot
         from rclpy.action import ActionClient
 
         from .context import WallDestackingContext
@@ -42,9 +42,21 @@ class WallDestackingStrategyNodeMixin:
         self._last_detections_monotonic = 0.0
         self._last_detection_count = 0
         self._last_perception_error = 0
+        self._last_perception_health_monotonic = 0.0
+        self._invalid_detection_frame_warnings = set()
         self._estop = False
         self._active_nav_goal_handle = None
         self._active_grasp_goal_handle = None
+        self._active_substate_fsm = ""
+        self._active_substate_state = "IDLE"
+        self._active_substate_enter_monotonic = time.monotonic()
+        self._active_substate_extra = {}
+        self._last_nav_feedback_states = []
+        self._last_nav_alignment_error_current = float("nan")
+        self._last_grasp_feedback_states = []
+        self._last_grasp_pressure_min_left = 0.0
+        self._last_grasp_pressure_min_right = 0.0
+        self._last_recovery_action = "NONE"
         self._refresh_strategy_config()
 
         self._nav_client = ActionClient(
@@ -69,6 +81,11 @@ class WallDestackingStrategyNodeMixin:
             get_topic_name(self, "fsm_grasp_pair", "/fsm/grasp_pair"),
             make_qos_profile("RELIABLE", "VOLATILE", 5),
         )
+        self._active_substate_pub = self.create_publisher(
+            FsmStateSnapshot,
+            get_topic_name(self, "fsm_active_substate", "/fsm/active_substate"),
+            make_qos_profile("RELIABLE", "TRANSIENT_LOCAL", 1),
+        )
 
     def on_config_reloaded(self) -> None:
         self._refresh_strategy_config()
@@ -87,9 +104,13 @@ class WallDestackingStrategyNodeMixin:
 
     def on_perception_health(self, msg):
         self._last_perception_error = int(msg.error_code)
+        self._last_perception_health_monotonic = time.monotonic()
 
     def on_safety_status(self, msg):
         self._estop = bool(msg.estop)
+        if self._estop and self._strategy_goal_active:
+            self._set_active_substate("WallDestackingFSM", "ESTOP_CANCEL_CHILDREN", {"estop_source": str(msg.estop_source)})
+            self._cancel_active_children()
 
     def handle_goal(self, goal_request):
         del goal_request
@@ -103,6 +124,7 @@ class WallDestackingStrategyNodeMixin:
         del goal_handle
         from rclpy.action import CancelResponse
 
+        self._set_active_substate("WallDestackingFSM", "CANCEL_REQUESTED", {})
         self._cancel_active_children()
         return CancelResponse.ACCEPT
 
@@ -120,6 +142,11 @@ class WallDestackingStrategyNodeMixin:
         self._pair_sequence = 0
         self._grid_slots = []
         self._slot_sizes_by_id = {}
+        self._last_nav_feedback_states = []
+        self._last_grasp_feedback_states = []
+        self._last_grasp_pressure_min_left = 0.0
+        self._last_grasp_pressure_min_right = 0.0
+        self._last_recovery_action = "NONE"
         self.ctx.task_id = self._current_task_id
         self.ctx.wall_index = self._current_wall_index
 
@@ -133,18 +160,25 @@ class WallDestackingStrategyNodeMixin:
 
             self._set_wall_state("RUN_WALL_MAPPING")
             self._publish_feedback(goal_handle, "RUN_WALL_MAPPING", 0)
-            detections = await self._wait_for_grid_detections(goal_handle)
-            self._grid_slots = self._build_grid_slots(detections, self._current_wall_index)
+            self._grid_slots = await self._run_wall_mapping_fsm(goal_handle)
             self._publish_grid_snapshot()
 
             for phase, phase_state in ((0, "LEFT_PHASE"), (1, "RIGHT_PHASE")):
                 self._current_phase = phase
                 self.ctx.current_phase = phase_state
+                self._set_wall_state("NAVIGATE_TO_PHASE_WORKPOSE")
+                self._publish_feedback(goal_handle, "NAVIGATE_TO_PHASE_WORKPOSE", self._phase_progress_percent(phase))
+                await self._navigate_to_phase_workpose(goal_handle, phase)
+
+                self._set_wall_state("RUN_PHASE_PERCEPTION")
+                self._publish_feedback(goal_handle, "RUN_PHASE_PERCEPTION", self._phase_progress_percent(phase))
+                await self._run_phase_perception_fsm(goal_handle, phase)
+
                 self._set_wall_state(phase_state)
                 self._publish_feedback(goal_handle, phase_state, self._phase_progress_percent(phase))
                 while self._phase_has_occupied_slots(phase):
                     self._check_cancel_or_estop(goal_handle)
-                    pair_msg = self._select_next_pair(phase, goal_handle.request.fixed_place_pose_robot)
+                    pair_msg = self._run_pair_selection_fsm(phase, goal_handle.request.fixed_place_pose_robot)
                     if pair_msg is None:
                         raise _StrategyFailure(int(ErrorCode.E_PAIR_NO_CANDIDATE), f"no pair candidate in {phase_state}")
                     self.ctx.current_grasp_pair = pair_msg
@@ -176,6 +210,7 @@ class WallDestackingStrategyNodeMixin:
             return result
         except _StrategyCancelled:
             self._set_wall_state("CANCELLED")
+            self._set_active_substate("WallDestackingFSM", "CANCELLED", {"total_boxes_picked": int(self._total_boxes_picked)})
             goal_handle.canceled()
             result = RunWallDestacking.Result()
             result.success = False
@@ -186,6 +221,7 @@ class WallDestackingStrategyNodeMixin:
             return result
         except _StrategyFailure as exc:
             self._last_error_code = int(exc.error_code)
+            recovery = await self._run_wall_recovery_fsm(int(exc.error_code), exc.reason)
             self._set_wall_state("FAILED")
             goal_handle.abort()
             result = RunWallDestacking.Result()
@@ -193,10 +229,11 @@ class WallDestackingStrategyNodeMixin:
             result.walls_completed = 0
             result.total_boxes_picked = int(self._total_boxes_picked)
             result.error_code = int(exc.error_code)
-            result.failure_reason = exc.reason
+            result.failure_reason = f"{exc.reason}; recovery_action={recovery['recovery_action']}"
             return result
         except Exception as exc:  # pragma: no cover - ROS2 运行期兜底
             self._last_error_code = int(ErrorCode.E_WALL_UNKNOWN)
+            recovery = await self._run_wall_recovery_fsm(int(ErrorCode.E_WALL_UNKNOWN), str(exc))
             self._set_wall_state("FAILED")
             goal_handle.abort()
             result = RunWallDestacking.Result()
@@ -204,7 +241,7 @@ class WallDestackingStrategyNodeMixin:
             result.walls_completed = 0
             result.total_boxes_picked = int(self._total_boxes_picked)
             result.error_code = int(ErrorCode.E_WALL_UNKNOWN)
-            result.failure_reason = str(exc)
+            result.failure_reason = f"{exc}; recovery_action={recovery['recovery_action']}"
             self.get_logger().error(f"wall destacking failed: {exc}")
             return result
         finally:
@@ -231,6 +268,7 @@ class WallDestackingStrategyNodeMixin:
             {
                 "detection_count": self._last_detection_count,
                 "total_boxes_picked": self._total_boxes_picked,
+                "last_recovery_action": self._last_recovery_action,
             },
             sort_keys=True,
         )
@@ -249,6 +287,36 @@ class WallDestackingStrategyNodeMixin:
         self._ready_state = state
         self._state_enter_monotonic = time.monotonic()
         self.publish_state_heartbeat()
+
+    def _set_active_substate(self, fsm_name: str, state: str, extra: dict | None = None) -> None:
+        extra = dict(extra or {})
+        changed = fsm_name != self._active_substate_fsm or state != self._active_substate_state
+        if changed:
+            self._active_substate_fsm = fsm_name
+            self._active_substate_state = state
+            self._active_substate_enter_monotonic = time.monotonic()
+        self._active_substate_extra = extra
+        self._publish_active_substate()
+
+    def _publish_active_substate(self) -> None:
+        if self._active_substate_pub is None:
+            return
+        from fsm_msgs.msg import FsmStateSnapshot
+
+        msg = FsmStateSnapshot()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.node_name = self.get_name()
+        msg.fsm_name = self._active_substate_fsm
+        msg.current_state = self._active_substate_state
+        msg.parent_fsm = "WallDestackingFSM"
+        msg.parent_state = self._wall_state
+        msg.task_id = self._current_task_id
+        msg.wall_index = int(self._current_wall_index)
+        msg.phase = int(self._current_phase)
+        msg.state_elapsed_sec = float(time.monotonic() - self._active_substate_enter_monotonic)
+        msg.last_error_code = int(self._last_error_code)
+        msg.extra_json = json.dumps(self._active_substate_extra, ensure_ascii=False, sort_keys=True)
+        self._active_substate_pub.publish(msg)
 
     def _publish_feedback(self, goal_handle, state: str, progress_percent: int) -> None:
         from fsm_msgs.action import RunWallDestacking
@@ -303,11 +371,46 @@ class WallDestackingStrategyNodeMixin:
         raise _StrategyFailure(int(ErrorCode.E_COMM_ACTION_TIMEOUT), f"{action_name} action server unavailable")
 
     async def _navigate_to_observation(self, goal_handle):
-        from action_msgs.msg import GoalStatus
         from fsm_core.constants import GoalType, Phase
+
+        return await self._navigate_to_workpose(
+            goal_handle=goal_handle,
+            goal_type=GoalType.OBSERVATION,
+            phase=int(Phase.LEFT),
+            pose_prefix="business.observation_pose",
+            require_fine_alignment=False,
+            timeout_key="WallDestackingFSM_NAVIGATE_TO_OBSERVATION_POSE",
+        )
+
+    async def _navigate_to_phase_workpose(self, goal_handle, phase: int):
+        from fsm_core.constants import GoalType
+
+        goal_type = GoalType.LEFT_PHASE if int(phase) == 0 else GoalType.RIGHT_PHASE
+        pose_prefix = "business.left_phase_workpose" if int(phase) == 0 else "business.right_phase_workpose"
+        return await self._navigate_to_workpose(
+            goal_handle=goal_handle,
+            goal_type=goal_type,
+            phase=int(phase),
+            pose_prefix=pose_prefix,
+            require_fine_alignment=True,
+            timeout_key="WallDestackingFSM_NAVIGATE_TO_PHASE_WORKPOSE",
+        )
+
+    async def _navigate_to_workpose(
+        self,
+        goal_handle,
+        goal_type: str,
+        phase: int,
+        pose_prefix: str,
+        require_fine_alignment: bool,
+        timeout_key: str,
+    ):
+        from action_msgs.msg import GoalStatus
         from fsm_core.error_code import ErrorCode
         from fsm_msgs.action import NavigateToPose
 
+        self._last_nav_feedback_states = []
+        self._last_nav_alignment_error_current = float("nan")
         await self._wait_for_action_server(
             self._nav_client,
             goal_handle,
@@ -315,16 +418,16 @@ class WallDestackingStrategyNodeMixin:
             "navigate_to_pose",
         )
         goal = NavigateToPose.Goal()
-        goal.goal_type = GoalType.OBSERVATION
-        goal.target_pose = self._pose_from_business_prefix("business.observation_pose", "map")
+        goal.goal_type = str(goal_type)
+        goal.target_pose = self._pose_from_business_prefix(pose_prefix, "map")
         goal.wall_frame_pose = self._identity_pose("map")
-        goal.phase = int(Phase.LEFT)
+        goal.phase = int(phase)
         goal.desired_distance_to_wall = float(self.config.get("business.desired_distance_to_wall", 0.6))
         goal.desired_yaw_to_wall = float(self.config.get("business.desired_yaw_to_wall", 0.0))
-        goal.desired_lateral_offset = 0.0
-        goal.require_fine_alignment = False
-        goal.timeout_sec = float(self.config.get("fsm.state_timeouts.WallDestackingFSM_NAVIGATE_TO_OBSERVATION_POSE", 60.0))
-        send_future = self._nav_client.send_goal_async(goal)
+        goal.desired_lateral_offset = float(goal.target_pose.pose.position.y)
+        goal.require_fine_alignment = bool(require_fine_alignment)
+        goal.timeout_sec = float(self.config.get(f"fsm.state_timeouts.{timeout_key}", 60.0))
+        send_future = self._nav_client.send_goal_async(goal, feedback_callback=self._on_nav_feedback)
         nav_goal_handle = await self._wait_for_future(
             send_future,
             goal_handle,
@@ -337,7 +440,7 @@ class WallDestackingStrategyNodeMixin:
         result_wrapper = await self._wait_for_future(
             result_future,
             goal_handle,
-            float(self.config.get("fsm.state_timeouts.WallDestackingFSM_NAVIGATE_TO_OBSERVATION_POSE", 60.0)) + 2.0,
+            float(goal.timeout_sec) + 2.0,
             child_goal_handle=nav_goal_handle,
         )
         self._active_nav_goal_handle = None
@@ -348,11 +451,31 @@ class WallDestackingStrategyNodeMixin:
             raise _StrategyFailure(int(result.error_code or ErrorCode.E_NAV_UNKNOWN), result.failure_reason or "navigation failed")
         return result
 
+    def _on_nav_feedback(self, feedback_msg) -> None:
+        feedback = feedback_msg.feedback
+        state = str(feedback.current_state)
+        if state and (not self._last_nav_feedback_states or self._last_nav_feedback_states[-1] != state):
+            self._last_nav_feedback_states.append(state)
+        self._last_nav_alignment_error_current = float(feedback.alignment_error_current)
+        self._set_active_substate(
+            "NavigationClient",
+            state or "FEEDBACK",
+            {
+                "distance_remaining": float(feedback.distance_remaining),
+                "estimated_time_remaining": float(feedback.estimated_time_remaining),
+                "alignment_error_current": float(feedback.alignment_error_current),
+                "feedback_states": list(self._last_nav_feedback_states),
+            },
+        )
+
     async def _execute_pair_grasp(self, goal_handle, pair_msg, dry_run: bool):
         from action_msgs.msg import GoalStatus
         from fsm_core.error_code import ErrorCode
         from fsm_msgs.action import ExecutePairGrasp
 
+        self._last_grasp_feedback_states = []
+        self._last_grasp_pressure_min_left = 0.0
+        self._last_grasp_pressure_min_right = 0.0
         await self._wait_for_action_server(
             self._grasp_client,
             goal_handle,
@@ -363,7 +486,7 @@ class WallDestackingStrategyNodeMixin:
         goal.grasp_pair = pair_msg
         goal.timeout_sec = float(self.config.get("fsm.state_timeouts.WallDestackingFSM_WAIT_PAIR_GRASP_RESULT", 120.0))
         goal.dry_run = bool(dry_run)
-        send_future = self._grasp_client.send_goal_async(goal)
+        send_future = self._grasp_client.send_goal_async(goal, feedback_callback=self._on_grasp_feedback)
         grasp_goal_handle = await self._wait_for_future(
             send_future,
             goal_handle,
@@ -383,6 +506,294 @@ class WallDestackingStrategyNodeMixin:
         if result_wrapper.status == GoalStatus.STATUS_CANCELED:
             raise _StrategyCancelled()
         return result_wrapper.result
+
+    def _on_grasp_feedback(self, feedback_msg) -> None:
+        feedback = feedback_msg.feedback
+        state = str(feedback.current_state)
+        if state and (not self._last_grasp_feedback_states or self._last_grasp_feedback_states[-1] != state):
+            self._last_grasp_feedback_states.append(state)
+        self._last_grasp_pressure_min_left = min(float(self._last_grasp_pressure_min_left), float(feedback.vacuum_left_kpa))
+        self._last_grasp_pressure_min_right = min(float(self._last_grasp_pressure_min_right), float(feedback.vacuum_right_kpa))
+        self._set_active_substate(
+            "PairGraspClient",
+            state or "FEEDBACK",
+            {
+                "stage": str(feedback.current_stage),
+                "progress_percent": float(feedback.progress_percent),
+                "vacuum_left_kpa": float(feedback.vacuum_left_kpa),
+                "vacuum_right_kpa": float(feedback.vacuum_right_kpa),
+                "pressure_min_left_kpa": float(self._last_grasp_pressure_min_left),
+                "pressure_min_right_kpa": float(self._last_grasp_pressure_min_right),
+                "feedback_states": list(self._last_grasp_feedback_states),
+            },
+        )
+
+    async def _run_wall_mapping_fsm(self, goal_handle):
+        from fsm_core.error_code import ErrorCode
+
+        expected = self._rows * self._cols
+        frames_target = int(self.config.get("business.mapping_window.frames", 10))
+        timeout_sec = float(self.config.get("business.mapping_window.timeout_sec", 3.0))
+        deadline = time.monotonic() + timeout_sec
+        window_start = time.monotonic()
+        seen_sequences = set()
+        valid_frames = []
+        received_frames = 0
+        invalid_frames = 0
+        last_valid_count = 0
+
+        self._set_active_substate("WallMappingFSM", "START_WINDOW", {"expected_detections": expected, "timeout_sec": timeout_sec})
+        await self._sleep(0.01)
+        self._set_active_substate("WallMappingFSM", "COLLECT_FRAMES", {"target_frames": frames_target})
+
+        while time.monotonic() < deadline and len(valid_frames) < frames_target:
+            self._check_cancel_or_estop(goal_handle)
+            blocking_error = self._blocking_perception_error_code()
+            if blocking_error:
+                self._set_active_substate("WallMappingFSM", "MAPPING_ERROR", {"error_code": blocking_error})
+                raise _StrategyFailure(blocking_error, f"perception health error {blocking_error}")
+
+            msg = self._last_detections_msg
+            if msg is not None and self._last_detections_monotonic >= window_start:
+                sequence = int(getattr(msg, "frame_seq", 0))
+                if sequence not in seen_sequences:
+                    seen_sequences.add(sequence)
+                    received_frames += 1
+                    valid = self._valid_detections(msg)
+                    last_valid_count = max(last_valid_count, len(valid))
+                    if valid:
+                        valid_frames.append(valid)
+                    elif len(msg.detections) > 0:
+                        invalid_frames += 1
+                    self._set_active_substate(
+                        "WallMappingFSM",
+                        "COLLECT_FRAMES",
+                        {
+                            "received_frames": received_frames,
+                            "valid_frames": len(valid_frames),
+                            "last_valid_count": len(valid),
+                            "invalid_frames": invalid_frames,
+                        },
+                    )
+            await self._sleep(0.05)
+
+        if not valid_frames:
+            code = ErrorCode.E_MAP_GLOBAL_SCAN_FAIL if received_frames == 0 else ErrorCode.E_MAP_NO_DETECTION
+            self._set_active_substate(
+                "WallMappingFSM",
+                "MAPPING_ERROR",
+                {"error_code": int(code), "received_frames": received_frames, "invalid_frames": invalid_frames},
+            )
+            raise _StrategyFailure(int(code), "no valid mapping detection stream")
+
+        self._set_active_substate("WallMappingFSM", "FILTER_DETECTIONS", {"valid_frames": len(valid_frames)})
+        best_detections = max(valid_frames, key=len)
+        if len(best_detections) < expected:
+            self._set_active_substate(
+                "WallMappingFSM",
+                "MAPPING_ERROR",
+                {"error_code": int(ErrorCode.E_MAP_INSUFFICIENT_DETECTION), "best_valid_count": len(best_detections), "expected": expected},
+            )
+            raise _StrategyFailure(
+                int(ErrorCode.E_MAP_INSUFFICIENT_DETECTION),
+                f"need {expected} detections to build grid, got {len(best_detections)}",
+            )
+
+        self._set_active_substate("WallMappingFSM", "ESTIMATE_WALL_FRAME", {"wall_frame": "base_link_identity"})
+        await self._sleep(0.01)
+        self._set_active_substate("WallMappingFSM", "BUILD_5X5_GRID", {"detections": len(best_detections)})
+        try:
+            slots = self._build_grid_slots(best_detections, self._current_wall_index)
+        except Exception as exc:
+            self._set_active_substate("WallMappingFSM", "MAPPING_ERROR", {"error_code": int(ErrorCode.E_MAP_GRID_BUILD_FAIL), "reason": str(exc)})
+            raise _StrategyFailure(int(ErrorCode.E_MAP_GRID_BUILD_FAIL), f"grid build failed: {exc}") from exc
+
+        self._set_active_substate("WallMappingFSM", "INIT_GRID_SLOTS", {"slot_count": len(slots)})
+        if len(slots) != expected:
+            self._set_active_substate("WallMappingFSM", "MAPPING_ERROR", {"error_code": int(ErrorCode.E_MAP_GRID_INCOMPLETE), "slot_count": len(slots)})
+            raise _StrategyFailure(int(ErrorCode.E_MAP_GRID_INCOMPLETE), f"grid slots incomplete: {len(slots)}/{expected}")
+        self._set_active_substate("WallMappingFSM", "VALIDATE_GRID", {"slot_count": len(slots), "occupied": len(slots)})
+        await self._sleep(0.01)
+        self._set_active_substate("WallMappingFSM", "CHECK_NEW_WALL", {"wall_index": int(self._current_wall_index)})
+        await self._sleep(0.01)
+        self._set_active_substate("WallMappingFSM", "REPORT", {"slot_count": len(slots), "last_valid_count": last_valid_count})
+        return slots
+
+    async def _run_phase_perception_fsm(self, goal_handle, phase: int) -> None:
+        from fsm_core.constants import SlotStatus
+        from fsm_core.error_code import ErrorCode
+
+        phase_cols = self._phase_cols(phase)
+        occupied_slots = [
+            slot
+            for slot in self._grid_slots
+            if int(slot.col_index) in phase_cols and int(slot.status) == int(SlotStatus.OCCUPIED)
+        ]
+        timeout_sec = float(self.config.get("business.local_window.timeout_sec", 1.5))
+        frames_target = int(self.config.get("business.local_window.frames", 5))
+        deadline = time.monotonic() + timeout_sec
+        window_start = time.monotonic()
+        seen_sequences = set()
+        valid_frames = []
+        received_frames = 0
+        invalid_frames = 0
+
+        self._set_active_substate(
+            "PhasePerceptionFSM",
+            "START_LOCAL_WINDOW",
+            {
+                "phase": int(phase),
+                "phase_cols": phase_cols,
+                "occupied_slots": len(occupied_slots),
+                "nav_feedback_states": list(self._last_nav_feedback_states),
+            },
+        )
+        await self._sleep(0.01)
+        self._set_active_substate("PhasePerceptionFSM", "COLLECT_LOCAL_FRAMES", {"target_frames": frames_target})
+
+        while time.monotonic() < deadline and len(valid_frames) < frames_target:
+            self._check_cancel_or_estop(goal_handle)
+            blocking_error = self._blocking_perception_error_code()
+            if blocking_error:
+                self._set_active_substate("PhasePerceptionFSM", "PERCEPTION_ERROR", {"error_code": blocking_error})
+                raise _StrategyFailure(blocking_error, f"perception health error {blocking_error}")
+
+            msg = self._last_detections_msg
+            if msg is not None and self._last_detections_monotonic >= window_start:
+                sequence = int(getattr(msg, "frame_seq", 0))
+                if sequence not in seen_sequences:
+                    seen_sequences.add(sequence)
+                    received_frames += 1
+                    valid = self._valid_detections(msg)
+                    if valid:
+                        valid_frames.append(valid)
+                    elif len(msg.detections) > 0:
+                        invalid_frames += 1
+                    self._set_active_substate(
+                        "PhasePerceptionFSM",
+                        "COLLECT_LOCAL_FRAMES",
+                        {
+                            "received_frames": received_frames,
+                            "valid_frames": len(valid_frames),
+                            "last_valid_count": len(valid),
+                            "invalid_frames": invalid_frames,
+                        },
+                    )
+            await self._sleep(0.05)
+
+        if not occupied_slots:
+            self._set_active_substate("PhasePerceptionFSM", "REPORT", {"matched_slots": 0, "reason": "phase already empty"})
+            return
+        if received_frames == 0:
+            self._set_active_substate("PhasePerceptionFSM", "PERCEPTION_ERROR", {"error_code": int(ErrorCode.E_PERC_LOCAL_SCAN_TIMEOUT)})
+            raise _StrategyFailure(int(ErrorCode.E_PERC_LOCAL_SCAN_TIMEOUT), "phase perception stream timeout")
+        if not valid_frames:
+            self._set_active_substate(
+                "PhasePerceptionFSM",
+                "PERCEPTION_ERROR",
+                {"error_code": int(ErrorCode.E_PERC_NO_LOCAL_DETECTION), "received_frames": received_frames, "invalid_frames": invalid_frames},
+            )
+            raise _StrategyFailure(int(ErrorCode.E_PERC_NO_LOCAL_DETECTION), "no local detections while phase still has occupied slots")
+
+        self._set_active_substate("PhasePerceptionFSM", "FILTER_LOCAL", {"valid_frames": len(valid_frames)})
+        best_detections = max(valid_frames, key=len)
+        self._set_active_substate("PhasePerceptionFSM", "TRANSFORM_TO_ROBOT", {"frame_id": "base_link", "detections": len(best_detections)})
+        matches = self._match_detections_to_phase_slots(best_detections, phase)
+        self._set_active_substate("PhasePerceptionFSM", "MATCH_TO_SLOTS", {"matched_slots": len(matches), "occupied_slots": len(occupied_slots)})
+        if not matches:
+            self._set_active_substate("PhasePerceptionFSM", "PERCEPTION_ERROR", {"error_code": int(ErrorCode.E_PERC_ASSOCIATION_FAIL)})
+            raise _StrategyFailure(int(ErrorCode.E_PERC_ASSOCIATION_FAIL), "local detections do not match current phase slots")
+
+        now = self.get_clock().now().to_msg()
+        self._set_active_substate("PhasePerceptionFSM", "UPDATE_SLOT_POSES", {"matched_slots": len(matches)})
+        for slot in self._grid_slots:
+            det = matches.get(slot.slot_id)
+            if det is None:
+                continue
+            slot.latest_pose_robot = self._copy_pose_stamped(det.pose)
+            slot.visible = True
+            slot.confidence = float(det.confidence)
+            slot.last_seen_time = now
+            self._slot_sizes_by_id[slot.slot_id] = self._copy_vector3(det.size)
+
+        unseen = 0
+        self._set_active_substate("PhasePerceptionFSM", "MARK_UNSEEN", {"matched_slots": len(matches)})
+        for slot in occupied_slots:
+            if slot.slot_id not in matches:
+                slot.visible = False
+                unseen += 1
+        self._set_active_substate("PhasePerceptionFSM", "REPORT", {"matched_slots": len(matches), "unseen_slots": unseen})
+        self._publish_grid_snapshot()
+
+    def _run_pair_selection_fsm(self, phase: int, fixed_place_pose_robot):
+        from fsm_core.constants import SlotStatus
+
+        phase_cols = self._phase_cols(phase)
+        available = [
+            slot
+            for slot in self._grid_slots
+            if int(slot.col_index) in phase_cols and int(slot.status) == int(SlotStatus.OCCUPIED)
+        ]
+        self._set_active_substate("PairSelectionFSM", "FILTER_AVAILABLE", {"available_slots": len(available), "phase": int(phase)})
+        if not available:
+            self._set_active_substate("PairSelectionFSM", "REPORT", {"pair_id": "", "reason": "no available slot"})
+            return None
+        self._set_active_substate("PairSelectionFSM", "SORT_BY_PRIORITY", {"available_slots": len(available)})
+        self._set_active_substate("PairSelectionFSM", "BUILD_CANDIDATES", {"allow_single_arm": bool(self._allow_single_arm)})
+        pair_msg = self._select_next_pair(phase, fixed_place_pose_robot)
+        self._set_active_substate("PairSelectionFSM", "VALIDATE_REACHABILITY", {"candidate_found": pair_msg is not None})
+        if pair_msg is None:
+            self._set_active_substate("PairSelectionFSM", "PAIR_SELECTION_ERROR", {"reason": "no candidate"})
+            return None
+        self._set_active_substate("PairSelectionFSM", "CHECK_DUAL_ARM_CONFLICT", {"grasp_mode": int(pair_msg.grasp_mode)})
+        self._set_active_substate(
+            "PairSelectionFSM",
+            "ASSIGN_ARMS_BY_Y",
+            {"left_slot_id": pair_msg.left_slot_id, "right_slot_id": pair_msg.right_slot_id},
+        )
+        self._set_active_substate("PairSelectionFSM", "BUILD_GRASP_PAIR", {"pair_id": pair_msg.pair_id})
+        self._set_active_substate("PairSelectionFSM", "REPORT", {"pair_id": pair_msg.pair_id, "grasp_mode": int(pair_msg.grasp_mode)})
+        return pair_msg
+
+    async def _run_wall_recovery_fsm(self, error_code: int, reason: str) -> dict:
+        from fsm_core.error_code import ErrorLevel, RecoveryAction, get_error_meta
+
+        self._set_wall_state("WALL_ERROR_HANDLE")
+        meta = get_error_meta(int(error_code))
+        action_name = RecoveryAction(int(meta.default_recovery)).name
+        level_name = ErrorLevel(int(meta.level)).name
+        payload = {
+            "error_code": int(error_code),
+            "error_name": meta.name,
+            "level": level_name,
+            "source": meta.source.name,
+            "reason": str(reason),
+            "recovery_action": action_name,
+        }
+        self._set_active_substate("WallRecoveryFSM", "RECEIVE_ERROR", payload)
+        await self._sleep(0.01)
+        self._set_active_substate("WallRecoveryFSM", "CLASSIFY", payload)
+        await self._sleep(0.01)
+        retry_key = f"fsm.recovery_max_attempts.{action_name}"
+        max_attempts = int(self.config.get(retry_key, 1))
+        payload["retry_count"] = 0
+        payload["max_attempts"] = max_attempts
+        self._set_active_substate("WallRecoveryFSM", "CHECK_RETRY_LIMIT", payload)
+        await self._sleep(0.01)
+        self._set_active_substate("WallRecoveryFSM", "SELECT_RECOVERY_ACTION", payload)
+        await self._sleep(0.01)
+        terminal_actions = {
+            RecoveryAction.WAIT_MANUAL_RECOVERY.name,
+            RecoveryAction.ABORT_TASK.name,
+            RecoveryAction.E_STOP.name,
+        }
+        self._set_active_substate("WallRecoveryFSM", "EXECUTE_RECOVERY", payload)
+        await self._sleep(0.01)
+        final_state = "WAIT_MANUAL_RECOVERY" if action_name in terminal_actions or level_name in ("FATAL", "ESTOP") else "REPORT"
+        self._last_recovery_action = action_name
+        payload["manual_required"] = final_state == "WAIT_MANUAL_RECOVERY"
+        self._set_active_substate("WallRecoveryFSM", final_state, payload)
+        return payload
 
     async def _wait_for_grid_detections(self, goal_handle):
         from fsm_core.error_code import ErrorCode
@@ -411,9 +822,11 @@ class WallDestackingStrategyNodeMixin:
         confidence_min = float(self.config.get("business.detection_filter.confidence_min", 0.5))
         expected_label = str(self.config.get("business.detection_filter.class_label", "box"))
         valid = []
+        invalid_frame_count = 0
         for det in msg.detections:
             frame_id = det.pose.header.frame_id or det.header.frame_id or msg.header.frame_id
             if frame_id != "base_link":
+                invalid_frame_count += 1
                 continue
             if not det.pose_valid:
                 continue
@@ -422,7 +835,63 @@ class WallDestackingStrategyNodeMixin:
             if expected_label and det.class_label and det.class_label != expected_label:
                 continue
             valid.append(det)
+        if invalid_frame_count:
+            sequence = int(getattr(msg, "frame_seq", -1))
+            if sequence not in self._invalid_detection_frame_warnings:
+                self._invalid_detection_frame_warnings.add(sequence)
+                self.get_logger().warning(
+                    f"reject detection frame_seq={sequence}: {invalid_frame_count} detections are not in base_link"
+                )
         return valid
+
+    def _blocking_perception_error_code(self) -> int:
+        from fsm_core.error_code import ErrorCode
+
+        if self._last_perception_error == 0:
+            return 0
+        if self._last_perception_health_monotonic <= 0.0:
+            return 0
+        if time.monotonic() - self._last_perception_health_monotonic > 1.5:
+            return 0
+        blocking_codes = {
+            int(ErrorCode.E_EXT_PERC_CAMERA_FAIL),
+            int(ErrorCode.E_EXT_PERC_LIDAR_FAIL),
+            int(ErrorCode.E_EXT_PERC_YOLO_FAIL),
+            int(ErrorCode.E_COMM_TF_LOOKUP_FAIL),
+        }
+        return int(self._last_perception_error) if int(self._last_perception_error) in blocking_codes else 0
+
+    def _match_detections_to_phase_slots(self, detections, phase: int) -> dict[str, object]:
+        from fsm_core.constants import SlotStatus
+
+        phase_cols = self._phase_cols(phase)
+        y_tol = float(self.config.get("business.match_tolerance.y", 0.15))
+        z_tol = float(self.config.get("business.match_tolerance.z", 0.15))
+        candidate_slots = [
+            slot
+            for slot in self._grid_slots
+            if int(slot.col_index) in phase_cols and int(slot.status) == int(SlotStatus.OCCUPIED)
+        ]
+        matches = {}
+        for det in detections:
+            best_slot = None
+            best_score = float("inf")
+            det_y = float(det.pose.pose.position.y)
+            det_z = float(det.pose.pose.position.z)
+            for slot in candidate_slots:
+                if slot.slot_id in matches:
+                    continue
+                exp = slot.expected_pose_robot.pose.position
+                dy = abs(det_y - float(exp.y))
+                dz = abs(det_z - float(exp.z))
+                if dy <= y_tol and dz <= z_tol:
+                    score = dy + dz
+                    if score < best_score:
+                        best_score = score
+                        best_slot = slot
+            if best_slot is not None:
+                matches[best_slot.slot_id] = det
+        return matches
 
     def _build_grid_slots(self, detections, wall_index: int):
         from fsm_core.constants import SlotStatus
