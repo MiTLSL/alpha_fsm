@@ -233,9 +233,13 @@ def _run() -> int:
 
         harness.press_estop()
         harness.release_estop()
+        clear_start = time.monotonic()
         response = harness.clear_error()
         assert response.cleared and response.stage_reached == 5, response
         harness.spin_until(lambda: harness.system_state in ("SELF_CHECK", "STANDBY"), 2.0, "clear_error self check")
+        clear_elapsed = time.monotonic() - clear_start
+        if clear_elapsed > 6.0:
+            raise AssertionError(f"clear_error happy path exceeded 6s: {clear_elapsed:.3f}s")
 
         failures = [
             ("ESTOP_LOCK_STUCK", 1),

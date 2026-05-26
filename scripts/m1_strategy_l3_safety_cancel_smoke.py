@@ -240,10 +240,14 @@ def _run() -> int:
         harness.reset_case_flags()
         harness.start_task("l3_e2e_03_estop")
         harness.spin_until(lambda: harness.wall_state == "WAIT_PAIR_GRASP_RESULT", 20.0, "strategy grasp running before estop")
-        harness.press_estop()
+        estop_start = time.monotonic()
+        harness.call(harness.press_client, harness.Trigger.Request())
         harness.spin_until(lambda: harness.system_state == "E_STOP", 3.0, "RobotSystemFSM E_STOP")
         harness.spin_until(lambda: harness.safety_state == "EMERGENCY", 2.0, "SafetyMonitorFSM EMERGENCY")
         harness.spin_until(lambda: harness.saw_strategy_state("ESTOP_CANCEL_CHILDREN"), 3.0, "strategy estop child cancel")
+        estop_elapsed = time.monotonic() - estop_start
+        if estop_elapsed > 0.2:
+            raise AssertionError(f"estop response exceeded 200ms: {estop_elapsed:.3f}s")
         harness.spin_until(
             lambda: harness.saw_mock_node_state("mock_pair_grasp_execution_node", "CANCELLED")
             or harness.saw_mock_node_state("mock_pair_grasp_execution_node", "ESTOP_ABORT")

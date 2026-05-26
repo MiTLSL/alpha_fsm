@@ -9,6 +9,7 @@
   <exec_depend>rclpy</exec_depend>
   <exec_depend>fsm_core</exec_depend>
   <exec_depend>fsm_msgs</exec_depend>
+  <exec_depend>task_manager</exec_depend>
   <exec_depend>wall_destacking_strategy</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
