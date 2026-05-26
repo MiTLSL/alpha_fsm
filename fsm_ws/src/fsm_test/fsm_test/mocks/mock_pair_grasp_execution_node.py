@@ -1,9 +1,45 @@
 from __future__ import annotations
 
+import json
+
 from .common import FailureInjectionMixin, make_pose_stamped
 
 
 class MockPairGraspExecutionMixin(FailureInjectionMixin):
+    def handle_inject_failure(self, request, response):
+        params = {}
+        if request.params_json:
+            try:
+                params = json.loads(request.params_json)
+            except json.JSONDecodeError as exc:
+                response.accepted = False
+                response.message = f"invalid params_json: {exc}"
+                response.current_failure = getattr(self, "_current_failure", "NONE")
+                return response
+            if not isinstance(params, dict):
+                response.accepted = False
+                response.message = "params_json must be an object"
+                response.current_failure = getattr(self, "_current_failure", "NONE")
+                return response
+
+        failure_name = request.failure_name or "NONE"
+        if failure_name.endswith("_ONCE"):
+            request.failure_name = failure_name.removesuffix("_ONCE")
+            params["once"] = True
+
+        response = super().handle_inject_failure(request, response)
+        self._failure_once = bool(params.get("once", False)) and self._current_failure != "NONE"
+        return response
+
+    def _consume_failure_once(self, expected_failure: str) -> None:
+        if not getattr(self, "_failure_once", False) or self._current_failure != expected_failure:
+            return
+        self._current_failure = "NONE"
+        self._failure_once = False
+        if self._failure_reset_timer is not None:
+            self._failure_reset_timer.cancel()
+            self._failure_reset_timer = None
+
     def _set_mock_state(self, state: str, extra: str = "{}") -> None:
         if state == "ESTOP" and getattr(self, "_ready_state", "") in ("CANCEL_REQUESTED", "CANCELLED", "ESTOP_ABORT"):
             return
@@ -16,6 +52,7 @@ class MockPairGraspExecutionMixin(FailureInjectionMixin):
         from rclpy.action import GoalResponse
 
         if self._current_failure == "GOAL_REJECTED":
+            self._consume_failure_once("GOAL_REJECTED")
             return GoalResponse.REJECT
         return GoalResponse.ACCEPT
 
@@ -136,6 +173,7 @@ class MockPairGraspExecutionMixin(FailureInjectionMixin):
             "PLACE_FAIL": "RELEASE_BOX",
             "TIMEOUT": "CHECK_VACUUM",
         }
+        current_failure = self._current_failure
 
         if not goal_handle.request.dry_run:
             self.publish_vacuum_command(True, True)
@@ -163,7 +201,7 @@ class MockPairGraspExecutionMixin(FailureInjectionMixin):
                     self.publish_vacuum_command(False, False)
                 goal_handle.abort()
                 return self._make_result(goal_handle, success=False, result_code_name="ESTOP", error_code=int(ErrorCode.E_SAFETY_ESTOP_HW), failed_stage="ESTOP")
-            if failure_stage.get(self._current_failure) == state:
+            if failure_stage.get(current_failure) == state:
                 failed_stage = stage
                 break
             if state == "CHECK_VACUUM" and not goal_handle.request.dry_run:
@@ -199,16 +237,17 @@ class MockPairGraspExecutionMixin(FailureInjectionMixin):
             "PLACE_FAIL": ErrorCode.E_MOT_PLACE_FAIL,
             "TIMEOUT": ErrorCode.E_GRASP_GOAL_TIMEOUT,
         }
-        if self._current_failure in failure_map:
-            if self._current_failure == "TIMEOUT":
+        if current_failure in failure_map:
+            if current_failure == "TIMEOUT":
                 await self._sleep(min(float(goal_handle.request.timeout_sec or 0.5), 2.0))
             goal_handle.abort()
-            self._set_mock_state("FAILED", f'{{"failure":"{self._current_failure}","error_code":{int(failure_map[self._current_failure])}}}')
+            self._set_mock_state("FAILED", f'{{"failure":"{current_failure}","error_code":{int(failure_map[current_failure])}}}')
+            self._consume_failure_once(current_failure)
             return self._make_result(
                 goal_handle,
                 success=False,
                 result_code_name="FAILED_BOTH",
-                error_code=int(failure_map[self._current_failure]),
+                error_code=int(failure_map[current_failure]),
                 failed_stage=failed_stage or "PLAN",
             )
 
@@ -261,6 +300,7 @@ def main(args=None):
             self.create_reload_service()
             self.create_state_heartbeat("fsm_active_substate", "/fsm/active_substate", "MockPairGraspExecution")
             self.init_failure_injection()
+            self._failure_once = False
             self._estop = False
             self._vacuum_left_kpa = 0.0
             self._vacuum_right_kpa = 0.0

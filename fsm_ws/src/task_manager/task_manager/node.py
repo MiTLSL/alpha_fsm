@@ -13,8 +13,11 @@ SYSTEM_BOOTING = "BOOTING"
 SYSTEM_SELF_CHECK = "SELF_CHECK"
 SYSTEM_STANDBY = "STANDBY"
 SYSTEM_AUTO_MODE = "AUTO_MODE"
+SYSTEM_MANUAL_MODE = "MANUAL_MODE"
+SYSTEM_PAUSED = "PAUSED"
 SYSTEM_FAULT = "FAULT"
 SYSTEM_E_STOP = "E_STOP"
+SYSTEM_SHUTDOWN = "SHUTDOWN"
 
 TASK_WAIT = "WAIT_TASK"
 TASK_ACCEPT = "ACCEPT_TASK"
@@ -121,6 +124,7 @@ class TaskManagerNodeMixin:
         msg.extra_json = json.dumps(
             {
                 "pause_requested": self.ctx.pause_requested,
+                "resume_requested": self.ctx.resume_requested,
                 "cancel_requested": self.ctx.cancel_requested,
                 "clear_error_stage_reached": self.ctx.clear_error_stage_reached,
             },
@@ -141,7 +145,14 @@ class TaskManagerNodeMixin:
         msg.task_id = self.ctx.task_id
         msg.state_elapsed_sec = float(time.monotonic() - self._state_enter_monotonic)
         msg.last_error_code = int(self._last_error_code)
-        msg.extra_json = json.dumps({"task_state": self._task_state}, sort_keys=True)
+        msg.extra_json = json.dumps(
+            {
+                "task_state": self._task_state,
+                "pause_requested": self.ctx.pause_requested,
+                "paused_task_id": self.ctx.paused_task_id,
+            },
+            sort_keys=True,
+        )
         self._fsm_state_pub.publish(msg)
 
     def _request_start(self, request) -> tuple[bool, str]:
@@ -161,25 +172,28 @@ class TaskManagerNodeMixin:
         if self._system_state != SYSTEM_AUTO_MODE or self._task_state not in (TASK_PREPARE, TASK_RUN):
             return False, f"pause rejected from {self._system_state}/{self._task_state}"
         self.ctx.pause_requested = True
+        self.ctx.resume_requested = False
+        self.ctx.paused_task_id = self.ctx.task_id
+        self.ctx.paused_task_params_json = self.ctx.task_params_json
         self._cancel_wall_destacking_goal()
-        return True, "pause requested"
+        self._set_system_state(SYSTEM_PAUSED)
+        return True, "pause requested, system paused"
 
     def _request_resume(self, request) -> tuple[bool, str]:
         del request
-        if self._system_state != SYSTEM_AUTO_MODE or not self.ctx.pause_requested:
+        if self._system_state != SYSTEM_PAUSED or not self.ctx.pause_requested:
             return False, f"resume rejected from {self._system_state}/{self._task_state}"
-        self.ctx.pause_requested = False
         self.ctx.resume_requested = True
-        if self._task_state == TASK_WAIT and self.ctx.task_id:
-            self.ctx.pending_start = {"task_id": self.ctx.task_id, "params_json": self.ctx.task_params_json}
-            self._set_task_state(TASK_ACCEPT)
+        if self._task_state == TASK_WAIT and not self._pause_cancel_in_progress():
+            self._resume_paused_task()
         return True, "resume requested"
 
     def _request_cancel(self, request) -> tuple[bool, str]:
         del request
-        if self._task_state == TASK_WAIT:
+        if self._task_state == TASK_WAIT and not (self._system_state == SYSTEM_PAUSED and self.ctx.pause_requested):
             return False, "no active task to cancel"
         self.ctx.cancel_requested = True
+        self.ctx.resume_requested = False
         self._set_task_state(TASK_CANCEL)
         self._cancel_wall_destacking_goal()
         return True, "cancel requested"
@@ -205,10 +219,21 @@ class TaskManagerNodeMixin:
                 self._set_system_state(SYSTEM_FAULT)
             return
 
+        if self._system_state == SYSTEM_PAUSED:
+            self._settle_pause_if_needed()
+            if self.ctx.resume_requested and self._task_state == TASK_WAIT and not self._pause_cancel_in_progress():
+                self._resume_paused_task()
+            return
+
+        if self._system_state in (SYSTEM_MANUAL_MODE, SYSTEM_SHUTDOWN):
+            return
+
     def _tick_task_fsm(self) -> None:
-        if self._system_state not in (SYSTEM_AUTO_MODE, SYSTEM_FAULT, SYSTEM_E_STOP):
+        if self._system_state not in (SYSTEM_AUTO_MODE, SYSTEM_PAUSED, SYSTEM_FAULT, SYSTEM_E_STOP):
             return
         if self._system_state in (SYSTEM_FAULT, SYSTEM_E_STOP) and self._task_state not in (TASK_FAIL, TASK_CANCEL):
+            return
+        if self._system_state == SYSTEM_PAUSED and self._task_state != TASK_CANCEL:
             return
 
         if self.ctx.cancel_requested and self._task_state not in (TASK_WAIT, TASK_CANCEL):
@@ -332,9 +357,12 @@ class TaskManagerNodeMixin:
                 self.get_logger().warning(f"task cancel finished with strategy status={result_wrapper.status}")
         self.ctx.cancel_requested = False
         self.ctx.pause_requested = False
+        self.ctx.resume_requested = False
         self._set_error(ErrorCode.E_MAN_CANCELLED, "task cancelled")
         self._reset_task_runtime(clear_identity=True)
         self._set_task_state(TASK_WAIT)
+        if self._system_state == SYSTEM_PAUSED:
+            self._set_system_state(SYSTEM_STANDBY)
 
     def _send_wall_destacking_goal(self) -> None:
         from fsm_msgs.action import RunWallDestacking
@@ -404,6 +432,7 @@ class TaskManagerNodeMixin:
         self._reset_task_runtime(clear_identity=True)
         self.ctx.cancel_requested = False
         self.ctx.pause_requested = False
+        self.ctx.resume_requested = False
         self._last_error_code = 0
         self.ctx.last_error = None
         self._set_task_state(TASK_WAIT)
@@ -476,6 +505,7 @@ class TaskManagerNodeMixin:
         if self._system_state == SYSTEM_E_STOP:
             return
         self._cancel_wall_destacking_goal()
+        self.ctx.resume_requested = False
         code = ErrorCode.E_SAFETY_ESTOP_SW if getattr(self.ctx.safety_status, "estop_source", "") == "software" else ErrorCode.E_SAFETY_ESTOP_HW
         self._set_error(code, "estop active")
         self._set_system_state(SYSTEM_E_STOP)
@@ -568,6 +598,49 @@ class TaskManagerNodeMixin:
             self.ctx.task_id = ""
             self.ctx.task_params_json = "{}"
             self.ctx.task_start_time = 0.0
+            self.ctx.paused_task_id = ""
+            self.ctx.paused_task_params_json = "{}"
+
+    def _pause_cancel_in_progress(self) -> bool:
+        self._adopt_wall_destacking_goal_if_ready()
+        goal_future = self.ctx.wall_destacking_goal_future
+        result_future = self.ctx.wall_destacking_result_future
+        if goal_future is not None and not goal_future.done():
+            return True
+        if self._wall_destacking_cancel_in_progress():
+            return True
+        if result_future is not None and not result_future.done():
+            return True
+        return False
+
+    def _settle_pause_if_needed(self) -> None:
+        if not self.ctx.pause_requested or self._task_state == TASK_CANCEL:
+            return
+        self._cancel_wall_destacking_goal()
+        if self._pause_cancel_in_progress():
+            return
+        result_future = self.ctx.wall_destacking_result_future
+        if result_future is not None and result_future.done():
+            self.ctx.wall_destacking_result = result_future.result().result
+        self._reset_task_runtime(clear_identity=False)
+        self._set_task_state(TASK_WAIT)
+
+    def _resume_paused_task(self) -> None:
+        task_id = self.ctx.paused_task_id or self.ctx.task_id
+        params_json = self.ctx.paused_task_params_json or self.ctx.task_params_json or "{}"
+        if not task_id:
+            self._set_error(ErrorCode.E_TASK_VALIDATE_FAIL, "missing paused task identity")
+            self.ctx.pause_requested = False
+            self.ctx.resume_requested = False
+            self._set_system_state(SYSTEM_FAULT)
+            return
+        self.ctx.pending_start = {"task_id": task_id, "params_json": params_json}
+        self.ctx.pause_requested = False
+        self.ctx.resume_requested = False
+        self.ctx.paused_task_id = ""
+        self.ctx.paused_task_params_json = "{}"
+        self._set_system_state(SYSTEM_AUTO_MODE)
+        self._set_task_state(TASK_ACCEPT)
 
     def _make_fixed_place_pose(self):
         from geometry_msgs.msg import PoseStamped

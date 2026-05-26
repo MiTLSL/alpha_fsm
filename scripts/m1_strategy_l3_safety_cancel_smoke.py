@@ -50,6 +50,7 @@ class L3SafetyCancelHarness:
         self.task_state = ""
         self.wall_state = ""
         self.safety_estop = False
+        self.safety_state = ""
         self.saw_self_check_after_clear = False
         self.saw_task_cancel = False
         self.saw_wait_after_cancel = False
@@ -102,6 +103,11 @@ class L3SafetyCancelHarness:
 
     def _on_safety_status(self, msg):
         self.safety_estop = bool(msg.estop)
+        try:
+            details = json.loads(msg.details_json) if msg.details_json else {}
+        except json.JSONDecodeError:
+            details = {}
+        self.safety_state = str(details.get("safety_state", ""))
 
     def _on_vacuum_cmd(self, msg):
         del msg
@@ -236,6 +242,7 @@ def _run() -> int:
         harness.spin_until(lambda: harness.wall_state == "WAIT_PAIR_GRASP_RESULT", 20.0, "strategy grasp running before estop")
         harness.press_estop()
         harness.spin_until(lambda: harness.system_state == "E_STOP", 3.0, "RobotSystemFSM E_STOP")
+        harness.spin_until(lambda: harness.safety_state == "EMERGENCY", 2.0, "SafetyMonitorFSM EMERGENCY")
         harness.spin_until(lambda: harness.saw_strategy_state("ESTOP_CANCEL_CHILDREN"), 3.0, "strategy estop child cancel")
         harness.spin_until(
             lambda: harness.saw_mock_node_state("mock_pair_grasp_execution_node", "CANCELLED")
@@ -251,6 +258,7 @@ def _run() -> int:
             raise AssertionError(f"L3-E2E-03 clear_error failed: {response}")
         harness.spin_until(lambda: harness.saw_self_check_after_clear, 2.0, "SELF_CHECK after clear_error")
         harness.spin_until(lambda: harness.system_state == "STANDBY", 5.0, "STANDBY after clear_error")
+        harness.spin_until(lambda: harness.safety_state == "NORMAL", 2.0, "SafetyMonitorFSM NORMAL after clear_error")
 
         harness.reset_case_flags()
         harness.start_task("l3_e2e_04_cancel")
@@ -268,6 +276,7 @@ def _run() -> int:
         print(
             "state snapshot: "
             f"system={harness.system_state} task={harness.task_state} wall={harness.wall_state} "
+            f"safety={harness.safety_state}/{harness.safety_estop} "
             f"strategy_events={harness.strategy_events[-12:]} mock_events={harness.mock_events[-12:]}",
             file=sys.stderr,
         )

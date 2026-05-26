@@ -4,16 +4,19 @@ import json
 import math
 import time
 
+from .algorithms import AABB, assign_grid_indices_by_yz, fit_wall_plane_ransac, point_in_aabb
+
 
 class _StrategyCancelled(Exception):
     pass
 
 
 class _StrategyFailure(Exception):
-    def __init__(self, error_code: int, reason: str):
+    def __init__(self, error_code: int, reason: str, recovery: dict | None = None):
         super().__init__(reason)
         self.error_code = int(error_code)
         self.reason = reason
+        self.recovery = recovery
 
 
 class WallDestackingStrategyNodeMixin:
@@ -38,6 +41,8 @@ class WallDestackingStrategyNodeMixin:
         self._pair_sequence = 0
         self._grid_slots = []
         self._slot_sizes_by_id = {}
+        self._wall_plane_estimate = None
+        self._wall_frame_pose_robot = None
         self._last_detections_msg = None
         self._last_detections_monotonic = 0.0
         self._last_detection_count = 0
@@ -57,6 +62,7 @@ class WallDestackingStrategyNodeMixin:
         self._last_grasp_pressure_min_left = 0.0
         self._last_grasp_pressure_min_right = 0.0
         self._last_recovery_action = "NONE"
+        self._recovery_counters = {}
         self._refresh_strategy_config()
 
         self._nav_client = ActionClient(
@@ -142,11 +148,14 @@ class WallDestackingStrategyNodeMixin:
         self._pair_sequence = 0
         self._grid_slots = []
         self._slot_sizes_by_id = {}
+        self._wall_plane_estimate = None
+        self._wall_frame_pose_robot = None
         self._last_nav_feedback_states = []
         self._last_grasp_feedback_states = []
         self._last_grasp_pressure_min_left = 0.0
         self._last_grasp_pressure_min_right = 0.0
         self._last_recovery_action = "NONE"
+        self._recovery_counters = {}
         self.ctx.task_id = self._current_task_id
         self.ctx.wall_index = self._current_wall_index
 
@@ -192,7 +201,20 @@ class WallDestackingStrategyNodeMixin:
                     if not grasp_result.success:
                         code = int(grasp_result.result.error_code or ErrorCode.E_GRASP_UNKNOWN)
                         reason = grasp_result.result.failed_stage or "pair grasp failed"
-                        raise _StrategyFailure(code, reason)
+                        retry_count = self._record_pair_failure(pair_msg, code)
+                        max_retry = int(self.config.get("business.max_retry_per_slot", 3))
+                        recovery = await self._run_wall_recovery_fsm(
+                            code,
+                            reason,
+                            retry_count=retry_count,
+                            max_attempts=max_retry,
+                        )
+                        self._publish_grid_snapshot()
+                        if self._should_retry_pair_grasp(recovery, retry_count, max_retry):
+                            self._set_wall_state("RETRY_PAIR_GRASP")
+                            self._publish_feedback(goal_handle, "RETRY_PAIR_GRASP", self._phase_progress_percent(phase))
+                            continue
+                        raise _StrategyFailure(code, reason, recovery)
                     self._total_boxes_picked += self._mark_pair_removed(pair_msg)
                     self._set_wall_state("UPDATE_GRID_AFTER_GRASP")
                     self._publish_grid_snapshot()
@@ -221,7 +243,7 @@ class WallDestackingStrategyNodeMixin:
             return result
         except _StrategyFailure as exc:
             self._last_error_code = int(exc.error_code)
-            recovery = await self._run_wall_recovery_fsm(int(exc.error_code), exc.reason)
+            recovery = exc.recovery or await self._run_wall_recovery_fsm(int(exc.error_code), exc.reason)
             self._set_wall_state("FAILED")
             goal_handle.abort()
             result = RunWallDestacking.Result()
@@ -599,9 +621,30 @@ class WallDestackingStrategyNodeMixin:
                 f"need {expected} detections to build grid, got {len(best_detections)}",
             )
 
-        self._set_active_substate("WallMappingFSM", "ESTIMATE_WALL_FRAME", {"wall_frame": "base_link_identity"})
+        try:
+            plane = self._estimate_wall_frame(best_detections)
+        except _StrategyFailure as exc:
+            self._set_active_substate("WallMappingFSM", "MAPPING_ERROR", {"error_code": int(exc.error_code), "reason": exc.reason})
+            raise
+        except Exception as exc:
+            self._set_active_substate("WallMappingFSM", "MAPPING_ERROR", {"error_code": int(ErrorCode.E_MAP_WALL_FRAME_FAIL), "reason": str(exc)})
+            raise _StrategyFailure(int(ErrorCode.E_MAP_WALL_FRAME_FAIL), f"wall frame fit failed: {exc}") from exc
+        self._set_active_substate(
+            "WallMappingFSM",
+            "ESTIMATE_WALL_FRAME",
+            {
+                "normal": [round(value, 6) for value in plane.normal],
+                "inliers": len(plane.inlier_indices),
+                "mean_abs_error": float(plane.mean_abs_error),
+                "confidence": float(plane.confidence),
+            },
+        )
         await self._sleep(0.01)
-        self._set_active_substate("WallMappingFSM", "BUILD_5X5_GRID", {"detections": len(best_detections)})
+        self._set_active_substate(
+            "WallMappingFSM",
+            "BUILD_5X5_GRID",
+            {"detections": len(best_detections), "wall_confidence": float(plane.confidence)},
+        )
         try:
             slots = self._build_grid_slots(best_detections, self._current_wall_index)
         except Exception as exc:
@@ -697,8 +740,17 @@ class WallDestackingStrategyNodeMixin:
 
         self._set_active_substate("PhasePerceptionFSM", "FILTER_LOCAL", {"valid_frames": len(valid_frames)})
         best_detections = max(valid_frames, key=len)
-        self._set_active_substate("PhasePerceptionFSM", "TRANSFORM_TO_ROBOT", {"frame_id": "base_link", "detections": len(best_detections)})
-        matches = self._match_detections_to_phase_slots(best_detections, phase)
+        try:
+            detections_in_robot, transform_summary = self._transform_detections_to_robot(best_detections)
+        except Exception as exc:
+            self._set_active_substate("PhasePerceptionFSM", "PERCEPTION_ERROR", {"error_code": int(ErrorCode.E_COMM_TF_LOOKUP_FAIL), "reason": str(exc)})
+            raise _StrategyFailure(int(ErrorCode.E_COMM_TF_LOOKUP_FAIL), f"tf transform failed: {exc}") from exc
+        self._set_active_substate(
+            "PhasePerceptionFSM",
+            "TRANSFORM_TO_ROBOT",
+            {"frame_id": "base_link", "detections": len(detections_in_robot), "summary": transform_summary},
+        )
+        matches = self._match_detections_to_phase_slots(detections_in_robot, phase)
         self._set_active_substate("PhasePerceptionFSM", "MATCH_TO_SLOTS", {"matched_slots": len(matches), "occupied_slots": len(occupied_slots)})
         if not matches:
             self._set_active_substate("PhasePerceptionFSM", "PERCEPTION_ERROR", {"error_code": int(ErrorCode.E_PERC_ASSOCIATION_FAIL)})
@@ -727,24 +779,72 @@ class WallDestackingStrategyNodeMixin:
 
     def _run_pair_selection_fsm(self, phase: int, fixed_place_pose_robot):
         from fsm_core.constants import SlotStatus
+        from fsm_core.error_code import ErrorCode
 
         phase_cols = self._phase_cols(phase)
+        max_retry = int(self.config.get("business.max_retry_per_slot", 3))
         available = [
             slot
             for slot in self._grid_slots
-            if int(slot.col_index) in phase_cols and int(slot.status) == int(SlotStatus.OCCUPIED)
+            if int(slot.col_index) in phase_cols
+            and int(slot.status) == int(SlotStatus.OCCUPIED)
+            and bool(slot.visible)
+            and int(slot.retry_count) < max_retry
+            and self._slot_has_valid_pose(slot)
         ]
         self._set_active_substate("PairSelectionFSM", "FILTER_AVAILABLE", {"available_slots": len(available), "phase": int(phase)})
         if not available:
             self._set_active_substate("PairSelectionFSM", "REPORT", {"pair_id": "", "reason": "no available slot"})
             return None
+        available.sort(key=lambda slot: (int(slot.row_index), int(slot.col_index)))
         self._set_active_substate("PairSelectionFSM", "SORT_BY_PRIORITY", {"available_slots": len(available)})
-        self._set_active_substate("PairSelectionFSM", "BUILD_CANDIDATES", {"allow_single_arm": bool(self._allow_single_arm)})
-        pair_msg = self._select_next_pair(phase, fixed_place_pose_robot)
-        self._set_active_substate("PairSelectionFSM", "VALIDATE_REACHABILITY", {"candidate_found": pair_msg is not None})
-        if pair_msg is None:
+        candidates, single_blocked = self._build_pair_candidates(phase, available)
+        self._set_active_substate(
+            "PairSelectionFSM",
+            "BUILD_CANDIDATES",
+            {
+                "allow_single_arm": bool(self._allow_single_arm),
+                "candidate_count": len(candidates),
+                "single_not_allowed": bool(single_blocked),
+            },
+        )
+        if not candidates:
+            if single_blocked:
+                self._set_active_substate(
+                    "PairSelectionFSM",
+                    "PAIR_SELECTION_ERROR",
+                    {"error_code": int(ErrorCode.E_PAIR_SINGLE_NOT_ALLOWED), "reason": "single arm grasp disabled"},
+                )
+                raise _StrategyFailure(int(ErrorCode.E_PAIR_SINGLE_NOT_ALLOWED), "single arm grasp disabled")
             self._set_active_substate("PairSelectionFSM", "PAIR_SELECTION_ERROR", {"reason": "no candidate"})
             return None
+
+        rejection_reasons = []
+        selected = None
+        for candidate in candidates:
+            reachable, reason = self._pair_candidate_reachable(candidate)
+            if reachable:
+                selected = candidate
+                break
+            rejection_reasons.append(reason)
+        self._set_active_substate(
+            "PairSelectionFSM",
+            "VALIDATE_REACHABILITY",
+            {
+                "candidate_count": len(candidates),
+                "reachable": selected is not None,
+                "rejection_reasons": rejection_reasons[:4],
+            },
+        )
+        if selected is None:
+            self._set_active_substate(
+                "PairSelectionFSM",
+                "PAIR_SELECTION_ERROR",
+                {"error_code": int(ErrorCode.E_PAIR_NO_REACHABLE), "rejection_reasons": rejection_reasons[:6]},
+            )
+            raise _StrategyFailure(int(ErrorCode.E_PAIR_NO_REACHABLE), "no reachable pair candidate")
+
+        pair_msg = self._make_pair_from_candidate(selected, phase, fixed_place_pose_robot)
         self._set_active_substate("PairSelectionFSM", "CHECK_DUAL_ARM_CONFLICT", {"grasp_mode": int(pair_msg.grasp_mode)})
         self._set_active_substate(
             "PairSelectionFSM",
@@ -755,13 +855,25 @@ class WallDestackingStrategyNodeMixin:
         self._set_active_substate("PairSelectionFSM", "REPORT", {"pair_id": pair_msg.pair_id, "grasp_mode": int(pair_msg.grasp_mode)})
         return pair_msg
 
-    async def _run_wall_recovery_fsm(self, error_code: int, reason: str) -> dict:
+    async def _run_wall_recovery_fsm(
+        self,
+        error_code: int,
+        reason: str,
+        retry_count: int = 0,
+        max_attempts: int | None = None,
+    ) -> dict:
         from fsm_core.error_code import ErrorLevel, RecoveryAction, get_error_meta
 
         self._set_wall_state("WALL_ERROR_HANDLE")
         meta = get_error_meta(int(error_code))
         action_name = RecoveryAction(int(meta.default_recovery)).name
         level_name = ErrorLevel(int(meta.level)).name
+        counter_key = f"{action_name}:{int(error_code)}"
+        if int(retry_count) <= 0:
+            retry_count = int(self._recovery_counters.get(counter_key, 0)) + 1
+        else:
+            retry_count = max(int(retry_count), int(self._recovery_counters.get(counter_key, 0)))
+        self._recovery_counters[counter_key] = int(retry_count)
         payload = {
             "error_code": int(error_code),
             "error_name": meta.name,
@@ -769,15 +881,16 @@ class WallDestackingStrategyNodeMixin:
             "source": meta.source.name,
             "reason": str(reason),
             "recovery_action": action_name,
+            "retry_counter_key": counter_key,
         }
         self._set_active_substate("WallRecoveryFSM", "RECEIVE_ERROR", payload)
         await self._sleep(0.01)
         self._set_active_substate("WallRecoveryFSM", "CLASSIFY", payload)
         await self._sleep(0.01)
         retry_key = f"fsm.recovery_max_attempts.{action_name}"
-        max_attempts = int(self.config.get(retry_key, 1))
-        payload["retry_count"] = 0
-        payload["max_attempts"] = max_attempts
+        resolved_max_attempts = int(max_attempts if max_attempts is not None else self.config.get(retry_key, 1))
+        payload["retry_count"] = int(retry_count)
+        payload["max_attempts"] = resolved_max_attempts
         self._set_active_substate("WallRecoveryFSM", "CHECK_RETRY_LIMIT", payload)
         await self._sleep(0.01)
         self._set_active_substate("WallRecoveryFSM", "SELECT_RECOVERY_ACTION", payload)
@@ -789,9 +902,15 @@ class WallDestackingStrategyNodeMixin:
         }
         self._set_active_substate("WallRecoveryFSM", "EXECUTE_RECOVERY", payload)
         await self._sleep(0.01)
-        final_state = "WAIT_MANUAL_RECOVERY" if action_name in terminal_actions or level_name in ("FATAL", "ESTOP") else "REPORT"
+        retry_exhausted = resolved_max_attempts > 0 and int(retry_count) >= resolved_max_attempts
+        final_state = (
+            "WAIT_MANUAL_RECOVERY"
+            if action_name in terminal_actions or level_name in ("FATAL", "ESTOP") or retry_exhausted
+            else "REPORT"
+        )
         self._last_recovery_action = action_name
         payload["manual_required"] = final_state == "WAIT_MANUAL_RECOVERY"
+        payload["retry_exhausted"] = bool(retry_exhausted)
         self._set_active_substate("WallRecoveryFSM", final_state, payload)
         return payload
 
@@ -825,7 +944,7 @@ class WallDestackingStrategyNodeMixin:
         invalid_frame_count = 0
         for det in msg.detections:
             frame_id = det.pose.header.frame_id or det.header.frame_id or msg.header.frame_id
-            if frame_id != "base_link":
+            if not self._can_transform_frame_to_robot(frame_id):
                 invalid_frame_count += 1
                 continue
             if not det.pose_valid:
@@ -843,6 +962,64 @@ class WallDestackingStrategyNodeMixin:
                     f"reject detection frame_seq={sequence}: {invalid_frame_count} detections are not in base_link"
                 )
         return valid
+
+    def _estimate_wall_frame(self, detections):
+        points = [self._point_from_detection(det) for det in detections]
+        plane = fit_wall_plane_ransac(
+            points,
+            distance_threshold=float(self.config.get("business.wall_plane.ransac_distance_threshold", 0.03)),
+            min_inliers=int(self.config.get("business.mapping_window.min_valid_detections", 8)),
+        )
+        min_confidence = float(self.config.get("business.wall_plane.min_confidence", 0.3))
+        if float(plane.confidence) < min_confidence:
+            from fsm_core.error_code import ErrorCode
+
+            raise _StrategyFailure(
+                int(ErrorCode.E_MAP_WALL_FRAME_LOW_CONFIDENCE),
+                f"wall frame confidence too low: {plane.confidence:.3f}",
+            )
+        pose = self._identity_pose("base_link")
+        pose.pose.position.x = float(plane.centroid[0])
+        pose.pose.position.y = float(plane.centroid[1])
+        pose.pose.position.z = float(plane.centroid[2])
+        self._wall_plane_estimate = plane
+        self._wall_frame_pose_robot = pose
+        return plane
+
+    def _transform_detections_to_robot(self, detections) -> tuple[list[object], dict]:
+        transformed = []
+        summary = {"identity": 0, "static_fallback": 0}
+        for det in detections:
+            frame_id = self._detection_frame_id(det)
+            if frame_id in ("", "base_link"):
+                det.header.frame_id = "base_link"
+                det.pose.header.frame_id = "base_link"
+                summary["identity"] += 1
+                transformed.append(det)
+                continue
+            if not self._can_transform_frame_to_robot(frame_id):
+                raise ValueError(f"no transform from {frame_id} to base_link")
+            det.header.frame_id = "base_link"
+            det.pose.header.frame_id = "base_link"
+            summary["static_fallback"] += 1
+            transformed.append(det)
+        return transformed, summary
+
+    def _detection_frame_id(self, det) -> str:
+        return det.pose.header.frame_id or det.header.frame_id or "base_link"
+
+    def _can_transform_frame_to_robot(self, frame_id: str) -> bool:
+        if frame_id in ("", "base_link"):
+            return True
+        allowed_frames = self.config.get(
+            "business.tf_static_fallback.allowed_source_frames",
+            ["camera_link", "depth_camera_link", "camera_color_optical_frame"],
+        )
+        return bool(self.config.get("business.tf_static_fallback.enabled", True)) and str(frame_id) in {str(item) for item in allowed_frames}
+
+    def _point_from_detection(self, det) -> tuple[float, float, float]:
+        position = det.pose.pose.position
+        return (float(position.x), float(position.y), float(position.z))
 
     def _blocking_perception_error_code(self) -> int:
         from fsm_core.error_code import ErrorCode
@@ -898,27 +1075,29 @@ class WallDestackingStrategyNodeMixin:
         from fsm_msgs.msg import GridSlotState
 
         expected = self._rows * self._cols
-        ordered_by_z = sorted(detections, key=lambda det: float(det.pose.pose.position.z), reverse=True)[:expected]
+        assignments = assign_grid_indices_by_yz(
+            [self._point_from_detection(det) for det in detections],
+            rows=self._rows,
+            cols=self._cols,
+        )
         now = self.get_clock().now().to_msg()
         slots = []
         self._slot_sizes_by_id = {}
-        for row in range(self._rows):
-            row_detections = ordered_by_z[row * self._cols : (row + 1) * self._cols]
-            row_detections = sorted(row_detections, key=lambda det: float(det.pose.pose.position.y), reverse=True)
-            for col, det in enumerate(row_detections):
-                slot = GridSlotState()
-                slot.slot_id = f"wall_{wall_index}_row_{row}_col_{col}"
-                slot.wall_index = int(wall_index)
-                slot.row_index = int(row)
-                slot.col_index = int(col)
-                slot.status = int(SlotStatus.OCCUPIED)
-                slot.expected_pose_robot = self._copy_pose_stamped(det.pose)
-                slot.latest_pose_robot = self._copy_pose_stamped(det.pose)
-                slot.visible = True
-                slot.confidence = float(det.confidence)
-                slot.last_seen_time = now
-                slots.append(slot)
-                self._slot_sizes_by_id[slot.slot_id] = self._copy_vector3(det.size)
+        for assignment in assignments[:expected]:
+            det = detections[assignment.source_index]
+            slot = GridSlotState()
+            slot.slot_id = f"wall_{wall_index}_row_{assignment.row}_col_{assignment.col}"
+            slot.wall_index = int(wall_index)
+            slot.row_index = int(assignment.row)
+            slot.col_index = int(assignment.col)
+            slot.status = int(SlotStatus.OCCUPIED)
+            slot.expected_pose_robot = self._copy_pose_stamped(det.pose)
+            slot.latest_pose_robot = self._copy_pose_stamped(det.pose)
+            slot.visible = True
+            slot.confidence = float(det.confidence)
+            slot.last_seen_time = now
+            slots.append(slot)
+            self._slot_sizes_by_id[slot.slot_id] = self._copy_vector3(det.size)
         return slots
 
     def _publish_grid_snapshot(self) -> None:
@@ -931,51 +1110,99 @@ class WallDestackingStrategyNodeMixin:
         msg.wall_index = int(self._current_wall_index)
         msg.rows = int(self._rows)
         msg.cols = int(self._cols)
-        msg.wall_frame_pose = self._identity_pose("base_link")
+        msg.wall_frame_pose = self._copy_pose_stamped(self._wall_frame_pose_robot) if self._wall_frame_pose_robot is not None else self._identity_pose("base_link")
         msg.slots = self._grid_slots
         msg.status = 0
         self._grid_snapshot_pub.publish(msg)
 
-    def _select_next_pair(self, phase: int, fixed_place_pose_robot):
-        from fsm_core.constants import GraspMode, Phase, SlotStatus
-        from fsm_msgs.msg import GraspPair
+    def _build_pair_candidates(self, phase: int, available_slots) -> tuple[list[dict], bool]:
+        from fsm_core.constants import GraspMode, Phase
 
-        phase_cols = self._phase_cols(phase)
+        candidates = []
+        single_blocked = False
         for row in range(self._rows):
-            row_slots = [
-                slot
-                for slot in self._grid_slots
-                if int(slot.row_index) == row
-                and int(slot.col_index) in phase_cols
-                and int(slot.status) == int(SlotStatus.OCCUPIED)
-            ]
+            row_slots = [slot for slot in available_slots if int(slot.row_index) == row]
             row_slots.sort(key=lambda slot: int(slot.col_index))
             if len(row_slots) >= 2:
-                left_slot, right_slot = sorted(
-                    row_slots[:2],
-                    key=lambda slot: float(slot.latest_pose_robot.pose.position.y),
-                    reverse=True,
-                )
-                return self._make_grasp_pair_msg(
-                    GraspPair,
-                    phase,
-                    fixed_place_pose_robot,
-                    GraspMode.DUAL,
-                    left_slot=left_slot,
-                    right_slot=right_slot,
-                )
-            if len(row_slots) == 1 and self._allow_single_arm:
+                for index in range(len(row_slots) - 1):
+                    left_slot, right_slot = sorted(
+                        row_slots[index : index + 2],
+                        key=lambda slot: float(slot.latest_pose_robot.pose.position.y),
+                        reverse=True,
+                    )
+                    candidates.append({"mode": GraspMode.DUAL, "left_slot": left_slot, "right_slot": right_slot})
+                continue
+            if len(row_slots) == 1:
+                if not self._allow_single_arm:
+                    single_blocked = True
+                    continue
                 mode = GraspMode.LEFT_ONLY if phase == int(Phase.LEFT) else GraspMode.RIGHT_ONLY
                 slot = row_slots[0]
-                return self._make_grasp_pair_msg(
-                    GraspPair,
-                    phase,
-                    fixed_place_pose_robot,
-                    mode,
-                    left_slot=slot if mode == GraspMode.LEFT_ONLY else None,
-                    right_slot=slot if mode == GraspMode.RIGHT_ONLY else None,
+                candidates.append(
+                    {
+                        "mode": mode,
+                        "left_slot": slot if mode == GraspMode.LEFT_ONLY else None,
+                        "right_slot": slot if mode == GraspMode.RIGHT_ONLY else None,
+                    }
                 )
-        return None
+        return candidates, single_blocked
+
+    def _make_pair_from_candidate(self, candidate: dict, phase: int, fixed_place_pose_robot):
+        from fsm_msgs.msg import GraspPair
+
+        return self._make_grasp_pair_msg(
+            GraspPair,
+            phase,
+            fixed_place_pose_robot,
+            candidate["mode"],
+            left_slot=candidate.get("left_slot"),
+            right_slot=candidate.get("right_slot"),
+        )
+
+    def _pair_candidate_reachable(self, candidate: dict) -> tuple[bool, str]:
+        left_slot = candidate.get("left_slot")
+        right_slot = candidate.get("right_slot")
+        margin = self._reachability_margin()
+        if left_slot is not None and not point_in_aabb(self._slot_point(left_slot), self._workspace_aabb("left_arm_workspace"), margin):
+            return False, f"{left_slot.slot_id}:left_workspace"
+        if right_slot is not None and not point_in_aabb(self._slot_point(right_slot), self._workspace_aabb("right_arm_workspace"), margin):
+            return False, f"{right_slot.slot_id}:right_workspace"
+        return True, "reachable"
+
+    def _workspace_aabb(self, key: str) -> AABB:
+        prefix = f"business.{key}"
+        return AABB(
+            x_min=float(self.config.get(f"{prefix}.x_min", 0.0)),
+            x_max=float(self.config.get(f"{prefix}.x_max", 0.0)),
+            y_min=float(self.config.get(f"{prefix}.y_min", 0.0)),
+            y_max=float(self.config.get(f"{prefix}.y_max", 0.0)),
+            z_min=float(self.config.get(f"{prefix}.z_min", 0.0)),
+            z_max=float(self.config.get(f"{prefix}.z_max", 0.0)),
+        )
+
+    def _reachability_margin(self) -> float:
+        default_margin = max(
+            float(self.config.get("business.box_size.length", 0.4)),
+            float(self.config.get("business.box_size.width", 0.4)),
+            float(self.config.get("business.box_size.height", 0.4)),
+        )
+        return float(self.config.get("business.reachability_aabb_margin", default_margin))
+
+    def _slot_point(self, slot) -> tuple[float, float, float]:
+        position = slot.latest_pose_robot.pose.position
+        return (float(position.x), float(position.y), float(position.z))
+
+    def _slot_has_valid_pose(self, slot) -> bool:
+        pose = slot.latest_pose_robot
+        return bool(pose.header.frame_id) or any(
+            abs(value) > 1e-9
+            for value in (
+                float(pose.pose.position.x),
+                float(pose.pose.position.y),
+                float(pose.pose.position.z),
+                float(pose.pose.orientation.w),
+            )
+        )
 
     def _make_grasp_pair_msg(self, msg_type, phase: int, fixed_place_pose_robot, grasp_mode: int, left_slot=None, right_slot=None):
         pair = msg_type()
@@ -997,13 +1224,9 @@ class WallDestackingStrategyNodeMixin:
         return pair
 
     def _mark_pair_removed(self, pair_msg) -> int:
-        from fsm_core.constants import GraspMode, SlotStatus
+        from fsm_core.constants import SlotStatus
 
-        active_slot_ids = []
-        if pair_msg.grasp_mode in (int(GraspMode.DUAL), int(GraspMode.LEFT_ONLY)) and pair_msg.left_slot_id:
-            active_slot_ids.append(pair_msg.left_slot_id)
-        if pair_msg.grasp_mode in (int(GraspMode.DUAL), int(GraspMode.RIGHT_ONLY)) and pair_msg.right_slot_id:
-            active_slot_ids.append(pair_msg.right_slot_id)
+        active_slot_ids = self._pair_active_slot_ids(pair_msg)
         removed = 0
         for slot in self._grid_slots:
             if slot.slot_id in active_slot_ids and int(slot.status) == int(SlotStatus.OCCUPIED):
@@ -1011,6 +1234,37 @@ class WallDestackingStrategyNodeMixin:
                 slot.visible = False
                 removed += 1
         return removed
+
+    def _pair_active_slot_ids(self, pair_msg) -> list[str]:
+        from fsm_core.constants import GraspMode
+
+        active_slot_ids = []
+        if pair_msg.grasp_mode in (int(GraspMode.DUAL), int(GraspMode.LEFT_ONLY)) and pair_msg.left_slot_id:
+            active_slot_ids.append(pair_msg.left_slot_id)
+        if pair_msg.grasp_mode in (int(GraspMode.DUAL), int(GraspMode.RIGHT_ONLY)) and pair_msg.right_slot_id:
+            active_slot_ids.append(pair_msg.right_slot_id)
+        return active_slot_ids
+
+    def _record_pair_failure(self, pair_msg, error_code: int) -> int:
+        active_slot_ids = set(self._pair_active_slot_ids(pair_msg))
+        if not active_slot_ids:
+            return int(self.config.get("business.max_retry_per_slot", 3))
+        max_retry_count = 0
+        for slot in self._grid_slots:
+            if slot.slot_id not in active_slot_ids:
+                continue
+            slot.retry_count = min(int(slot.retry_count) + 1, 255)
+            slot.last_error_code = int(error_code)
+            max_retry_count = max(max_retry_count, int(slot.retry_count))
+        return max_retry_count
+
+    def _should_retry_pair_grasp(self, recovery: dict, retry_count: int, max_retry: int) -> bool:
+        if self._estop:
+            return False
+        action = str(recovery.get("recovery_action", ""))
+        if action not in {"RETRY_CURRENT_STATE", "SWITCH_TARGET", "REPLAN"}:
+            return False
+        return int(retry_count) < int(max_retry)
 
     def _phase_has_occupied_slots(self, phase: int) -> bool:
         from fsm_core.constants import SlotStatus

@@ -14,6 +14,8 @@ class TaskContext:
     perception_health: Any = None
     task_state: str = "WAIT_TASK"
     pending_start: dict[str, str] | None = None
+    paused_task_id: str = ""
+    paused_task_params_json: str = "{}"
     clear_error_stage_reached: int = 0
     pause_requested: bool = False
     resume_requested: bool = False
