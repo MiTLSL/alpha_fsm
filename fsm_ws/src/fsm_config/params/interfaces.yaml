@@ -29,6 +29,8 @@
         io_state: "/io/state"
         cmd_vel_align: "/cmd_vel_align"
         estop: "/estop"
+        amcl_pose: "/amcl_pose"
+        chassis_status: "/chassis_node/status"
         tf: "/tf"
         tf_static: "/tf_static"
 
@@ -41,11 +43,19 @@
         safety_sw_estop: "/safety/sw_estop"
         nav_base_recovery: "/nav/base_recovery"
         reload_config: "/reload_config"
+        lifecycle_manager_navigation_is_active: "/lifecycle_manager_navigation/is_active"
+        lifecycle_manager_localization_is_active: "/lifecycle_manager_localization/is_active"
+        local_costmap_clear: "/local_costmap/clear_entirely_local_costmap"
+        global_costmap_clear: "/global_costmap/clear_entirely_global_costmap"
+        chassis_reset_fault: "/chassis_node/reset_fault"
+        chassis_enable: "/chassis_node/enable"
 
       actions:
         run_wall_destacking: "/run_wall_destacking"
         navigate_to_pose: "/navigate_to_pose"
+        nav2_navigate_to_pose: "/nav2/navigate_to_pose"
         execute_pair_grasp: "/execute_pair_grasp"
+        moveit_move_group: "/move_action"
 
       frames:
         map: "map"

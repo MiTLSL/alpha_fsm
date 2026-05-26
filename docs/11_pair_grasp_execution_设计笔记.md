@@ -1,6 +1,6 @@
 # pair_grasp_execution 设计笔记
 
-版本：2026-05-26
+版本：2026-05-27
 
 ## 1. 当前 M1 边界
 
@@ -24,6 +24,22 @@
 - 放置与退回动作。
 
 因此 M1 阶段抓取闭环必须使用 `mock_pair_grasp_execution_node`，真实抓取适配在 M2/M3 落地。
+
+## 1.1 M2-preintegration 当前状态
+
+当前 `pair_grasp_execution_node` 已不再只是 M1 骨架：
+
+- `/execute_pair_grasp` 已实现 14 阶段主线反馈，阶段名与 mock 保持一致。
+- 已实现 GraspPair 入参校验，结构化返回 `E_GRASP_INVALID_PAIR=5010`。
+- `backend_mode=dry_run`：只跑状态主线和接口反馈，不调用真实控制器。
+- `backend_mode=fake_real`：使用内部 fake MoveIt 后端注入 `IK_FAIL`、`TRAJ_FAIL`、`COLLISION`、`MOVE_FAIL`、`VACUUM_NOT_REACHED`。
+- `backend_mode=real`：已接 `moveit_msgs/action/MoveGroup` client，action 名默认 `interfaces.actions.moveit_move_group=/move_action`；当前是 MoveIt 接入骨架，真实约束构造和控制器执行仍需要 MoveIt mock hardware / 真机验证。
+- cancel / estop 已在主线内处理；cancel 返回 `CANCELLED`，estop 返回 `ESTOP` 并按 `hold_on_estop` 决定真空保持策略。
+- 当前仍不实现真实吸盘硬件后端，只保留 `/vacuum/cmd` 和 `/vacuum/pressure` 转发。
+
+离线验收：
+
+- `scripts/m2_pre_grasp_fake_real_smoke.py`
 
 ## 2. 对外接口
 
@@ -99,6 +115,21 @@ REPORT
    - action cancel 必须停止当前轨迹。
    - estop 时必须立即停止执行，并按 `hold_on_estop` 决定是否保持真空。
 
+## 3.1 M2-SIM 验收轨道
+
+M2-SIM 用 MoveIt 2 + ros2_control mock_components 验证 `pair_grasp_execution_node` 的 IK、轨迹规划和 dry_run 阶段划分。它不验证真实控制器动态、吸附接触或箱体受力。
+
+| 用例 | 组合 | 验收点 |
+|---|---|---|
+| L3-SIM-03 | 真实 `pair_grasp_execution_node` + MoveIt mock hardware + sim scene | 标准 pair 能完成 PLAN_PREGRASP→RETREAT_SAFE dry_run；工作空间边界 pair 能触发 5200/5201/5210 中对应错误 |
+| L3-SIM-04 | sim perception + real navigation adapter + real grasp dry_run | 抓取 adapter 能在完整任务上下文中接收 strategy 选出的 GraspPair，反馈阶段与 mock 保持一致 |
+
+实现约束：
+
+- `dry_run=true` 时只允许规划和运动到安全预抓/验证姿态，不吸附、不搬运真实箱体。
+- MoveIt mock hardware 只在测试 launch 中启用，生产节点仍通过既定 MoveIt / 控制器接口工作。
+- L3-SIM-03 通过后，M2-C03 仍必须跑 L3-M2-GRASP-DRY；仿真只提前暴露 IK/规划边界。
+
 ## 4. 错误码约定
 
 | 场景 | 错误码 | recovery |
@@ -119,5 +150,6 @@ REPORT
 ## 5. 风险
 
 - 双臂同步规划和单臂 fallback 的决策边界还需要真机工作空间标定。
+- M2-SIM 能提前发现 IK/规划不可达，但不能证明真实控制器跟随、吸附接触和碰撞监控可靠。
 - 真空压力阈值必须按真实泵、吸盘、箱体材质重新标定，不能沿用 mock 默认值。
 - `dry_run` 真机语义必须冻结：建议只规划和运动到安全预抓位，不吸附、不搬运。

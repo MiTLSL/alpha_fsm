@@ -97,6 +97,16 @@
         tf_timeout_ms: 200
         min_face_inlier_count: 20
 
+      navigation_manager:
+        backend_mode: "fake_real"
+        nav2_client_wait_sec: 2.0
+        service_timeout_sec: 2.0
+        require_lifecycle_active: true
+        require_amcl_pose: true
+        amcl_timeout_sec: 1.5
+        amcl_max_covariance: 0.25
+        fine_align_stub_success: true
+
       fine_alignment:
         timeout_sec: 15.0
         retry_limit: 1
@@ -117,6 +127,16 @@
         mock_release_time_ms: 100
         hold_on_estop: true
         release_on_cancel: false
+
+      pair_grasp_execution:
+        backend_mode: "dry_run"
+        fake_failure_mode: "NONE"
+        stage_delay_sec: 0.03
+        moveit_action_wait_sec: 2.0
+        moveit_planning_group: "dual_v5_arm_with_base"
+        left_tip_link: "left_v5_tool0"
+        right_tip_link: "right_v5_tool0"
+        skip_vacuum_check: true
 
       max_walls: 0
       max_task_duration_sec: 1800

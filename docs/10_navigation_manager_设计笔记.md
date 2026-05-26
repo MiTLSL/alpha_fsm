@@ -1,6 +1,6 @@
 # navigation_manager 设计笔记
 
-版本：2026-05-26
+版本：2026-05-27
 
 ## 1. 当前 M1 边界
 
@@ -21,6 +21,22 @@
 - twist_mux `/estop`、chassis enable/reset 的真实调用。
 
 因此 M1 阶段真实任务闭环必须使用 `mock_navigation_manager_node`，`navigation_manager_node` 仅作为 M2 真实适配层占位。
+
+## 1.1 M2-preintegration 当前状态
+
+当前 `navigation_manager_node` 已不再只是 M1 骨架：
+
+- `/navigate_to_pose` 会转发到内部 Nav2 `NavigateToPose` Action，内部 action 名默认 `interfaces.actions.nav2_navigate_to_pose=/nav2/navigate_to_pose`，避免和 FSM 对外 `/navigate_to_pose` 冲突。
+- 已接 `/lifecycle_manager_navigation/is_active`、`/lifecycle_manager_localization/is_active`，失败映射 `E_NAV_LIFECYCLE_NOT_ACTIVE=4050`。
+- 已订 `/amcl_pose`，按 `business.navigation_manager.amcl_max_covariance` 和 `amcl_timeout_sec` 判断定位健康，失败映射 `E_NAV_LOCALIZATION_LOST=4010`。
+- 已封装 local/global costmap clear client。
+- `/nav/base_recovery` 已调用 `/estop=False`、`/chassis_node/reset_fault`、`/chassis_node/enable`，并映射 4060/4061。
+- 已支持上层 cancel 透传到 Nav2 goal。
+- `require_fine_alignment=true` 时当前只提供最小 stub：发布一次零 `/cmd_vel_align` 并回报收敛；完整视觉/激光闭环仍属于后续 M2-SIM / 真机验证项。
+
+离线验收：
+
+- `scripts/m2_pre_nav_fake_real_smoke.py`
 
 ## 2. 对外接口
 
@@ -85,6 +101,21 @@ M2 中应由以下信号合成：
    - lifecycle inactive 映射 `E_NAV_LIFECYCLE_NOT_ACTIVE=4050`。
    - localization lost 映射 `E_NAV_LOCALIZATION_LOST=4010`。
 
+## 3.1 M2-SIM 验收轨道
+
+M2-SIM 用来在真机 Nav2 / chassis 未稳定前，先验证 navigation_manager 的 FINE_ALIGN 控制律和 TF 使用方式。
+
+| 用例 | 组合 | 验收点 |
+|---|---|---|
+| L3-SIM-02 | 真实 `navigation_manager_node` + `fake_nav2_base_node` + `sim_world_node` | LEFT/RIGHT_PHASE 初始偏差 ±10cm / ±5° 时，`alignment_error_current` 在 `fine_alignment.timeout_sec` 内收敛 |
+| L3-SIM-04 | 真实 `navigation_manager_node` + sim perception + grasp dry_run | `/cmd_vel_align` 与 coarse navigation 不竞争；Action feedback 阶段名能定位到 FINE_ALIGN |
+
+实现约束：
+
+- `fake_nav2_base_node` 只在测试 profile 中模拟 coarse goal 到位和 `/cmd_vel_align` 运动学积分，不能进入生产 launch。
+- navigation_manager 的生产代码不得订阅 `/sim/*`，只读既有 `/perception/box_detections`、TF 和 Nav2/chassis 接口。
+- L3-SIM-02 通过后，M2-B02 仍必须在真实视觉反馈下跑 L3-M2-NAV；仿真只证明控制律和 TF 链路合理。
+
 ## 4. 错误码约定
 
 | 场景 | 错误码 | recovery |
@@ -101,5 +132,6 @@ M2 中应由以下信号合成：
 ## 5. 风险
 
 - FINE_ALIGN 反馈源尚未冻结：可能来自 perception_adapter 的墙面法向，也可能来自激光最近点。
+- M2-SIM 能提前验证 FINE_ALIGN 控制律，但无法覆盖真实视觉漏检、延迟和噪声；L3-M2-NAV 仍是 M2 完成判据。
 - `/clear_error` 第 1 阶段需要和 twist_mux 实际锁语义对齐，不能只发 `/estop=False` 就认为成功。
 - 真机 Nav2 的 action result 与当前 mock 阶段序列不一定一致，M2 需要补状态映射表。
