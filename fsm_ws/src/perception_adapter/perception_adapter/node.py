@@ -12,12 +12,23 @@ class PerceptionAdapterNodeMixin:
         self._upstream_subscription = None
         self._last_upstream_monotonic = 0.0
         self._last_conversion_error = ""
+        self._last_tf_error = ""
+        self._last_tf_ok = False
+        self._last_used_static_fallback = False
         self._frame_seq = 0
         self._detection_publish_count = 0
         self._detection_rate_window_start = time.monotonic()
         self._base_frame = str(self.config.get("interfaces.frames.base_link", "base_link"))
         self._default_upstream_frame = str(self.config.get("interfaces.frames.body", "body"))
         self._tf_lookup_timeout_sec = float(self.config.get("business.perception_adapter.tf_timeout_ms", 200.0)) / 1000.0
+        self._allow_static_tf_fallback = bool(self.config.get("business.tf_static_fallback.enabled", True))
+        self._static_tf_fallback_frames = {
+            str(frame)
+            for frame in self.config.get(
+                "business.tf_static_fallback.allowed_source_frames",
+                ["body", "camera_link", "depth_camera_link", "camera_color_optical_frame"],
+            )
+        }
 
         try:
             from box_perception_msgs.msg import BoxPerceptionResult
@@ -63,7 +74,7 @@ class PerceptionAdapterNodeMixin:
         upstream_age_ms = (now - self._last_upstream_monotonic) * 1000.0 if upstream_seen else -1.0
         upstream_timeout_ms = float(self.config.get("business.perception_adapter.result_timeout_ms", 1000.0))
         upstream_fresh = upstream_seen and upstream_age_ms <= upstream_timeout_ms and not self._last_conversion_error
-        tf_ready = bool(upstream_fresh)
+        tf_ready = bool(upstream_fresh and (self._last_tf_ok or self._last_used_static_fallback))
 
         msg = PerceptionHealth()
         msg.header.stamp = self.get_clock().now().to_msg()
@@ -100,6 +111,9 @@ class PerceptionAdapterNodeMixin:
                 "m2_prerequisite": not has_upstream_type,
                 "import_error": self._upstream_import_error,
                 "last_conversion_error": self._last_conversion_error,
+                "last_tf_error": self._last_tf_error,
+                "last_tf_ok": bool(self._last_tf_ok),
+                "used_static_fallback": bool(self._last_used_static_fallback),
             },
             sort_keys=True,
         )
@@ -180,10 +194,28 @@ class PerceptionAdapterNodeMixin:
             pose_stamped.pose = pose
         if pose_stamped.header.frame_id == self._base_frame:
             pose_stamped.header.frame_id = self._base_frame
+            self._last_tf_ok = True
+            self._last_tf_error = ""
+            self._last_used_static_fallback = False
             return pose_stamped
         pose_stamped.header.stamp = self._stamp_or_now(pose_stamped.header.stamp)
-        transform = self._lookup_transform_to_base(pose_stamped.header.frame_id, pose_stamped.header.stamp)
+        try:
+            transform = self._lookup_transform_to_base(pose_stamped.header.frame_id, pose_stamped.header.stamp)
+        except Exception as exc:
+            self._last_tf_ok = False
+            self._last_tf_error = str(exc)
+            if not self._can_use_static_tf_fallback(pose_stamped.header.frame_id):
+                raise
+            self._last_used_static_fallback = True
+            pose_stamped.header.frame_id = self._base_frame
+            return pose_stamped
+        self._last_tf_ok = True
+        self._last_tf_error = ""
+        self._last_used_static_fallback = False
         return self._apply_transform(pose_stamped, transform)
+
+    def _can_use_static_tf_fallback(self, source_frame: str) -> bool:
+        return bool(self._allow_static_tf_fallback and str(source_frame) in self._static_tf_fallback_frames)
 
     def _message_stamp_or_now(self, msg):
         return self._stamp_or_now(getattr(getattr(msg, "header", None), "stamp", None))

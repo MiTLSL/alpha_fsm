@@ -96,6 +96,11 @@
         result_timeout_ms: 1000
         tf_timeout_ms: 200
         min_face_inlier_count: 20
+        box_center_offset_sign: -1.0
+
+      tf_static_fallback:
+        enabled: true
+        allowed_source_frames: ["body", "camera_link", "depth_camera_link", "camera_color_optical_frame"]
 
       navigation_manager:
         backend_mode: "fake_real"
@@ -115,6 +120,9 @@
         yaw_tolerance: 0.05
         max_linear_x: 0.05
         max_angular_z: 0.20
+        linear_gain: 0.80
+        angular_gain: 1.50
+        min_detection_confidence: 0.50
         feedback_timeout_ms: 1000
 
       vacuum:
@@ -136,6 +144,28 @@
         moveit_planning_group: "dual_v5_arm_with_base"
         left_tip_link: "left_v5_tool0"
         right_tip_link: "right_v5_tool0"
+        moveit_allowed_planning_time_sec: 5.0
+        moveit_num_planning_attempts: 10
+        moveit_velocity_scaling: 0.30
+        moveit_acceleration_scaling: 0.20
+        moveit_position_tolerance: 0.015
+        moveit_orientation_tolerance: 0.08
+        input_pose_represents_box_center: true
+        contact_standoff_x: 0.0
+        pregrasp_offset_x: 0.10
+        extract_offset_x: 0.10
+        retreat_offset_x: 0.10
+        place_y_separation: 0.40
+        attach_box_to_planning_scene: true
+        attached_box_weight_kg: 2.0
+        attached_box_touch_links: []
+        planning_workspace:
+          x_min: -1.0
+          x_max: 1.5
+          y_min: -1.0
+          y_max: 1.0
+          z_min: 0.0
+          z_max: 2.0
         skip_vacuum_check: true
 
       max_walls: 0

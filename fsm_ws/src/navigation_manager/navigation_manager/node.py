@@ -35,6 +35,7 @@ def _angle_delta(a: float, b: float) -> float:
 class NavigationManagerNodeMixin:
     def init_navigation_backend(self):
         from fsm_core.ros2_helpers import get_action_name, get_service_name, get_topic_name
+        from fsm_msgs.msg import BoxDetectionArray
         from geometry_msgs.msg import PoseWithCovarianceStamped, Twist
         from nav2_msgs.action import NavigateToPose as Nav2NavigateToPose
         from nav2_msgs.srv import ClearEntireCostmap
@@ -53,6 +54,16 @@ class NavigationManagerNodeMixin:
         self._amcl_timeout_sec = float(self.config.get("business.navigation_manager.amcl_timeout_sec", 1.5))
         self._amcl_max_covariance = float(self.config.get("business.navigation_manager.amcl_max_covariance", 0.25))
         self._fine_align_stub_success = bool(self.config.get("business.navigation_manager.fine_align_stub_success", True))
+        self._fine_align_feedback_timeout_sec = float(self.config.get("business.fine_alignment.feedback_timeout_ms", 1000.0)) / 1000.0
+        self._fine_align_timeout_sec = float(self.config.get("business.fine_alignment.timeout_sec", 15.0))
+        self._fine_align_pass_frames = int(self.config.get("business.fine_alignment.pass_frames", 5))
+        self._fine_align_dist_tolerance = float(self.config.get("business.fine_alignment.dist_tolerance", 0.02))
+        self._fine_align_yaw_tolerance = float(self.config.get("business.fine_alignment.yaw_tolerance", 0.05))
+        self._fine_align_max_linear_x = float(self.config.get("business.fine_alignment.max_linear_x", 0.05))
+        self._fine_align_max_angular_z = float(self.config.get("business.fine_alignment.max_angular_z", 0.20))
+        self._fine_align_linear_gain = float(self.config.get("business.fine_alignment.linear_gain", 0.8))
+        self._fine_align_angular_gain = float(self.config.get("business.fine_alignment.angular_gain", 1.5))
+        self._fine_align_min_detection_confidence = float(self.config.get("business.fine_alignment.min_detection_confidence", 0.5))
         self._map_frame = str(self.config.get("interfaces.frames.map", "map"))
 
         self._last_amcl_pose = None
@@ -61,6 +72,8 @@ class NavigationManagerNodeMixin:
         self._last_nav2_feedback_pose = None
         self._last_nav2_distance_remaining = 0.0
         self._last_nav2_eta_sec = 0.0
+        self._last_box_detections = []
+        self._last_detection_monotonic = 0.0
         self._last_lifecycle_ok = False
         self._active_nav2_goal_handle = None
 
@@ -104,6 +117,13 @@ class NavigationManagerNodeMixin:
             10,
             callback_group=self._io_callback_group,
         )
+        self._perception_sub = self.create_subscription(
+            BoxDetectionArray,
+            get_topic_name(self, "perception_detections", "/perception/box_detections"),
+            self.on_box_detections,
+            5,
+            callback_group=self._io_callback_group,
+        )
 
     def handle_goal(self, goal_request):
         del goal_request
@@ -135,6 +155,14 @@ class NavigationManagerNodeMixin:
         diagonal_indices = (0, 7, 35)
         values = [abs(float(covariance[index])) for index in diagonal_indices if index < len(covariance)]
         self._last_amcl_covariance = max(values) if values else float("inf")
+
+    def on_box_detections(self, msg):
+        self._last_box_detections = [
+            det
+            for det in msg.detections
+            if bool(det.pose_valid) and float(det.confidence) >= self._fine_align_min_detection_confidence
+        ]
+        self._last_detection_monotonic = time.monotonic()
 
     def publish_nav_health(self):
         from std_msgs.msg import Bool
@@ -231,11 +259,15 @@ class NavigationManagerNodeMixin:
             return self._make_failure_result(result, target_pose, int(error), f"Nav2 returned status {int(nav2_result.status)}")
 
         actual_pose = self._last_nav2_feedback_pose or target_pose
+        final_alignment_error = float("nan")
         if request.require_fine_alignment:
-            ok = await self._run_fine_alignment_stub(goal_handle)
+            ok, error_code, reason, final_alignment_error = await self._run_fine_alignment(goal_handle, request)
             if not ok:
-                goal_handle.abort()
-                return self._make_failure_result(result, actual_pose, int(ErrorCode.E_NAV_FINE_ALIGN_FAIL), "fine alignment failed")
+                if error_code == int(ErrorCode.E_NAV_GOAL_CANCELLED):
+                    goal_handle.canceled()
+                else:
+                    goal_handle.abort()
+                return self._make_failure_result(result, actual_pose, int(error_code), reason)
 
         self._publish_feedback(goal_handle, "VERIFY", distance=0.0, eta=0.0)
         position_error, yaw_error = self._pose_error(target_pose, actual_pose)
@@ -243,7 +275,7 @@ class NavigationManagerNodeMixin:
         result.actual_base_pose = actual_pose
         result.position_error = float(position_error)
         result.yaw_error = float(yaw_error)
-        result.alignment_error = 0.0 if request.require_fine_alignment else float("nan")
+        result.alignment_error = float(final_alignment_error)
         result.workpose_valid = True
         result.error_code = 0
         result.failure_reason = ""
@@ -252,13 +284,90 @@ class NavigationManagerNodeMixin:
         goal_handle.succeed()
         return result
 
-    async def _run_fine_alignment_stub(self, goal_handle) -> bool:
+    async def _run_fine_alignment(self, goal_handle, request) -> tuple[bool, int, str, float]:
+        from fsm_core.error_code import ErrorCode
+
+        deadline = time.monotonic() + max(self._fine_align_timeout_sec, 0.1)
+        pass_count = 0
+        final_alignment_error = float("nan")
+
+        while time.monotonic() < deadline:
+            if goal_handle.is_cancel_requested:
+                self._publish_zero_align_velocity()
+                return False, int(ErrorCode.E_NAV_GOAL_CANCELLED), "cancelled during fine alignment", final_alignment_error
+
+            measurement = self._alignment_measurement(request)
+            if measurement is None:
+                self._publish_feedback(goal_handle, "FINE_ALIGN", distance=0.0, eta=max(deadline - time.monotonic(), 0.0))
+                if time.monotonic() - self._last_detection_monotonic > self._fine_align_feedback_timeout_sec:
+                    self._publish_zero_align_velocity()
+                    return False, int(ErrorCode.E_NAV_FINE_ALIGN_NO_FEEDBACK), "no fresh perception feedback for fine alignment", final_alignment_error
+                await self._sleep(0.05)
+                continue
+
+            dist_error, yaw_error = measurement
+            final_alignment_error = math.sqrt(dist_error * dist_error + yaw_error * yaw_error)
+            self._publish_feedback(
+                goal_handle,
+                "FINE_ALIGN",
+                distance=abs(dist_error),
+                eta=max(deadline - time.monotonic(), 0.0),
+                alignment_error=final_alignment_error,
+            )
+
+            if abs(dist_error) <= self._fine_align_dist_tolerance and abs(yaw_error) <= self._fine_align_yaw_tolerance:
+                pass_count += 1
+                self._publish_zero_align_velocity()
+                if pass_count >= max(self._fine_align_pass_frames, 1):
+                    return True, 0, "", final_alignment_error
+            else:
+                pass_count = 0
+                self._publish_align_velocity(dist_error, yaw_error)
+
+            await self._sleep(0.05)
+
+        self._publish_zero_align_velocity()
+        return False, int(ErrorCode.E_NAV_FINE_ALIGN_FAIL), "fine alignment timeout", final_alignment_error
+
+    def _alignment_measurement(self, request):
+        if not self._last_box_detections:
+            return None
+        if time.monotonic() - self._last_detection_monotonic > self._fine_align_feedback_timeout_sec:
+            return None
+
+        detections = sorted(
+            self._last_box_detections,
+            key=lambda det: (abs(float(det.pose.pose.position.y) - float(request.desired_lateral_offset)), -float(det.confidence)),
+        )
+        sample = detections[: min(len(detections), 5)]
+        if not sample:
+            return None
+
+        distance = sum(float(det.pose.pose.position.x) for det in sample) / len(sample)
+        yaw_values = [_yaw_from_pose(det.pose) for det in sample]
+        yaw_sin = sum(math.sin(value) for value in yaw_values)
+        yaw_cos = sum(math.cos(value) for value in yaw_values)
+        measured_yaw = math.atan2(yaw_sin, yaw_cos)
+        dist_error = distance - float(request.desired_distance_to_wall)
+        yaw_error = _angle_delta(measured_yaw, float(request.desired_yaw_to_wall))
+        return dist_error, yaw_error
+
+    def _publish_align_velocity(self, dist_error: float, yaw_error: float) -> None:
         from geometry_msgs.msg import Twist
 
-        self._publish_feedback(goal_handle, "FINE_ALIGN", distance=0.0, eta=0.0, alignment_error=0.0)
+        msg = Twist()
+        msg.linear.x = self._clamp(self._fine_align_linear_gain * dist_error, -self._fine_align_max_linear_x, self._fine_align_max_linear_x)
+        msg.angular.z = self._clamp(self._fine_align_angular_gain * yaw_error, -self._fine_align_max_angular_z, self._fine_align_max_angular_z)
+        self._cmd_vel_align_pub.publish(msg)
+
+    def _publish_zero_align_velocity(self) -> None:
+        from geometry_msgs.msg import Twist
+
         self._cmd_vel_align_pub.publish(Twist())
-        await self._sleep(0.05)
-        return bool(self._fine_align_stub_success)
+
+    @staticmethod
+    def _clamp(value: float, low: float, high: float) -> float:
+        return max(float(low), min(float(high), float(value)))
 
     def _on_nav2_feedback(self, goal_handle, feedback_msg) -> None:
         feedback = feedback_msg.feedback

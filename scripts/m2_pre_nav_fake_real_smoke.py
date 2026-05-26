@@ -53,6 +53,7 @@ class NavFakeRealHarness:
     def __init__(self):
         import rclpy
         from fsm_msgs.action import NavigateToPose
+        from fsm_msgs.msg import BoxDetection, BoxDetectionArray
         from fsm_msgs.srv import BaseRecoveryCommand
         from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
         from nav2_msgs.action import NavigateToPose as Nav2NavigateToPose
@@ -64,6 +65,8 @@ class NavFakeRealHarness:
 
         self.rclpy = rclpy
         self.NavigateToPose = NavigateToPose
+        self.BoxDetection = BoxDetection
+        self.BoxDetectionArray = BoxDetectionArray
         self.BaseRecoveryCommand = BaseRecoveryCommand
         self.Nav2NavigateToPose = Nav2NavigateToPose
         self.PoseStamped = PoseStamped
@@ -98,7 +101,9 @@ class NavFakeRealHarness:
         self.node.create_service(Trigger, "/chassis_node/enable", self._handle_enable)
         self.node.create_subscription(Bool, "/estop", self._on_estop, 10)
         self.amcl_pub = self.node.create_publisher(PoseWithCovarianceStamped, "/amcl_pose", 10)
+        self.detection_pub = self.node.create_publisher(BoxDetectionArray, "/perception/box_detections", 10)
         self.amcl_timer = self.node.create_timer(0.05, self.publish_amcl)
+        self.detection_timer = self.node.create_timer(0.05, self.publish_detection)
         self.nav_client = ActionClient(self.node, NavigateToPose, "/navigate_to_pose")
         self.recovery_client = self.node.create_client(BaseRecoveryCommand, "/nav/base_recovery")
 
@@ -184,6 +189,24 @@ class NavFakeRealHarness:
         msg.pose.covariance[35] = float(self.amcl_covariance)
         self.amcl_pub.publish(msg)
 
+    def publish_detection(self) -> None:
+        msg = self.BoxDetectionArray()
+        msg.header.stamp = self.node.get_clock().now().to_msg()
+        msg.header.frame_id = "base_link"
+        msg.frame_seq = 1
+        det = self.BoxDetection()
+        det.header = msg.header
+        det.detection_id = "align_box"
+        det.pose.header = msg.header
+        det.pose.pose.position.x = 0.60
+        det.pose.pose.position.y = 0.0
+        det.pose.pose.position.z = 0.8
+        det.pose.pose.orientation.w = 1.0
+        det.confidence = 0.95
+        det.pose_valid = True
+        msg.detections.append(det)
+        self.detection_pub.publish(msg)
+
     def spin_until(self, predicate, timeout_sec: float, label: str) -> None:
         deadline = time.monotonic() + timeout_sec
         while time.monotonic() < deadline:
@@ -205,6 +228,9 @@ class NavFakeRealHarness:
         goal.target_pose = self.make_pose(1.0, 0.0, 0.0)
         goal.timeout_sec = float(timeout_sec)
         goal.require_fine_alignment = bool(fine_align)
+        goal.desired_distance_to_wall = 0.60
+        goal.desired_yaw_to_wall = 0.0
+        goal.desired_lateral_offset = 0.0
         send_future = self.nav_client.send_goal_async(goal)
         self.rclpy.spin_until_future_complete(self.node, send_future, timeout_sec=5.0)
         handle = send_future.result()

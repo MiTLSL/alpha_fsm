@@ -49,6 +49,7 @@
         global_costmap_clear: "/global_costmap/clear_entirely_global_costmap"
         chassis_reset_fault: "/chassis_node/reset_fault"
         chassis_enable: "/chassis_node/enable"
+        moveit_apply_planning_scene: "/apply_planning_scene"
 
       actions:
         run_wall_destacking: "/run_wall_destacking"
