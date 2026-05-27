@@ -1,0 +1,28 @@
+from __future__ import annotations
+
+
+STAGES = [
+    ("RECEIVE_PAIR", "CHECK"),
+    ("CHECK_PAIR_VALID", "CHECK"),
+    ("PLAN_PREGRASP", "PLAN"),
+    ("MOVE_TO_PREGRASP", "MOVE"),
+    ("APPROACH_AND_CONTACT", "MOVE"),
+    ("CHECK_VACUUM", "VACUUM"),
+    ("ATTACH_BOX_MODEL", "VACUUM"),
+    ("PLAN_EXTRACT", "PLAN"),
+    ("EXECUTE_EXTRACT", "MOVE"),
+    ("PLAN_CARRY", "PLAN"),
+    ("EXECUTE_CARRY", "MOVE"),
+    ("RELEASE_BOX", "RELEASE"),
+    ("RETREAT_SAFE", "MOVE"),
+    ("REPORT", "REPORT"),
+]
+
+
+FAKE_FAILURES = {
+    "IK_FAIL": ("PLAN_PREGRASP", "PLAN", 5200),
+    "TRAJ_FAIL": ("PLAN_EXTRACT", "PLAN", 5201),
+    "COLLISION": ("PLAN_CARRY", "PLAN", 5210),
+    "MOVE_FAIL": ("EXECUTE_EXTRACT", "MOVE", 5300),
+    "VACUUM_NOT_REACHED": ("CHECK_VACUUM", "VACUUM", 5105),
+}
