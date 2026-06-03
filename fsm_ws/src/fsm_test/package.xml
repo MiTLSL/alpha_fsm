@@ -7,10 +7,17 @@
   <license>Proprietary</license>
   <buildtool_depend>ament_python</buildtool_depend>
   <exec_depend>rclpy</exec_depend>
+  <exec_depend>box_perception_msgs</exec_depend>
   <exec_depend>fsm_core</exec_depend>
   <exec_depend>fsm_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>nav2_msgs</exec_depend>
   <exec_depend>task_manager</exec_depend>
   <exec_depend>wall_destacking_strategy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>visualization_msgs</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
   <test_depend>python3-pytest</test_depend>

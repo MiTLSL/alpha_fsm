@@ -1,0 +1,8 @@
+# Replace with real boundary pair fixtures.
+#
+# ik_fail_pair:
+#   expected_error_code: 5200
+# trajectory_fail_pair:
+#   expected_error_code: 5201
+# collision_pair:
+#   expected_error_code: 5210

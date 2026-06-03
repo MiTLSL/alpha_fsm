@@ -1,0 +1,16 @@
+# Replace with a real standard reachable pair fixture.
+#
+# task_id: "l3_sim_03"
+# wall_index: 0
+# pair_id: "standard_pair"
+# grasp_mode: "DUAL"
+# left_slot_id: 0
+# right_slot_id: 1
+# left_pose:
+#   frame_id: "base_link"
+#   position: {x: 0.6, y: 0.2, z: 1.0}
+#   orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}
+# right_pose:
+#   frame_id: "base_link"
+#   position: {x: 0.6, y: -0.2, z: 1.0}
+#   orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}

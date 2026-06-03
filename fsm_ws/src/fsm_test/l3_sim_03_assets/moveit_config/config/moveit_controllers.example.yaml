@@ -1,0 +1,16 @@
+# Replace with the real MoveIt controller mapping.
+#
+# Example shape only:
+#
+# moveit_simple_controller_manager:
+#   controller_names:
+#     - dual_v5_arm_controller
+#     - torso_controller
+#   dual_v5_arm_controller:
+#     type: FollowJointTrajectory
+#     action_ns: follow_joint_trajectory
+#     joints: []
+#   torso_controller:
+#     type: FollowJointTrajectory
+#     action_ns: follow_joint_trajectory
+#     joints: []

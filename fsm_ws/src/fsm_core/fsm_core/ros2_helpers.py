@@ -74,12 +74,28 @@ def load_common_parameter_dict() -> dict[str, Any]:
     return merged
 
 
+def _is_uninitialized_parameter_error(exc: Exception) -> bool:
+    try:
+        from rclpy.exceptions import ParameterUninitializedException
+    except ImportError:
+        return exc.__class__.__name__ == "ParameterUninitializedException"
+    return isinstance(exc, ParameterUninitializedException)
+
+
 def declare_parameters_from_dict(node: Any, data: dict[str, Any]) -> dict[str, Any]:
     declared: dict[str, Any] = {}
     for name, default in flatten_parameters(data).items():
         if not node.has_parameter(name):
             node.declare_parameter(name, default)
-        declared[name] = node.get_parameter(name).value
+        try:
+            declared[name] = node.get_parameter(name).value
+        except Exception as exc:
+            if not _is_uninitialized_parameter_error(exc):
+                raise
+            # ROS 2 launch YAML cannot infer the element type of empty arrays,
+            # so it may create an already-declared but uninitialized parameter.
+            # Keep the node config usable by falling back to the YAML default.
+            declared[name] = default
     return declared
 
 
