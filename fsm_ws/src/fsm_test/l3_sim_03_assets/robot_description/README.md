@@ -9,8 +9,18 @@ package instead of being copied here:
 fsm_ws/src/alfa_robot_v2_arm_v6/
 ```
 
-Use this drop zone only for a wrapper xacro, compatibility links, or temporary
-test-only overlays that should not be committed back into the supplied package.
+The latest upstream motion-control code provided that wrapper layer, now copied
+here:
+
+```text
+urdf/alfa_robot_l3_sim.urdf.xacro
+urdf/alfa_robot_macro.ros2_control.xacro
+urdf/alfa_robot_v2_arm_v6_raw.urdf
+```
+
+`alfa_robot_l3_sim.urdf.xacro` maps the raw v6 model into V5 semantic names such
+as `left_v5_joint1..6`, `right_v5_joint1..6`, `left_v5_tool0`, and
+`right_v5_tool0`.
 
 Required before L3-SIM-03:
 

@@ -33,7 +33,7 @@
 - 已实现 GraspPair 入参校验，结构化返回 `E_GRASP_INVALID_PAIR=5010`。
 - `backend_mode=dry_run`：只跑状态主线和接口反馈，不调用真实控制器。
 - `backend_mode=fake_real`：使用内部 fake MoveIt 后端注入 `IK_FAIL`、`TRAJ_FAIL`、`COLLISION`、`MOVE_FAIL`、`VACUUM_NOT_REACHED`。
-- `backend_mode=real`：已接 `moveit_msgs/action/MoveGroup` client，action 名默认 `interfaces.actions.moveit_move_group=/move_action`；当前是 MoveIt 接入骨架，真实约束构造和控制器执行仍需要 MoveIt mock hardware / 真机验证。
+- `backend_mode=real`：已接 `moveit_msgs/action/MoveGroup` client，action 名默认 `interfaces.actions.moveit_move_group=/move_action`；当前是 MoveIt 接入骨架，真实约束构造和控制器执行仍需要 L3-SIM-03 轻量物理仿真 / 真机 dry-run 验证。
 - cancel / estop 已在主线内处理；cancel 返回 `CANCELLED`，estop 返回 `ESTOP` 并按 `hold_on_estop` 决定真空保持策略。
 - 当前仍不实现真实吸盘硬件后端，只保留 `/vacuum/cmd` 和 `/vacuum/pressure` 转发。
 
@@ -117,18 +117,19 @@ REPORT
 
 ## 3.1 M2-SIM 验收轨道
 
-M2-SIM 用 MoveIt 2 + ros2_control mock_components 验证 `pair_grasp_execution_node` 的 IK、轨迹规划和 dry_run 阶段划分。它不验证真实控制器动态、吸附接触或箱体受力。
+M2-SIM / L3-SIM 用 MoveIt 2 + ros2_control 验证 `pair_grasp_execution_node` 的 IK、轨迹规划和 dry_run 阶段划分。L3-SIM-03 第一版进一步引入 Gazebo 轻量物理场景，验证机器人、场地、纸箱和控制链路能共同启动并完成规划/预抓主线。它仍不证明真实吸附可靠性；“接触条件 + 固定约束”的仿真抓取桥接器放在阶段 B。
 
 | 用例 | 组合 | 验收点 |
 |---|---|---|
-| L3-SIM-03 | 真实 `pair_grasp_execution_node` + MoveIt mock hardware + sim scene | 标准 pair 能完成 PLAN_PREGRASP→RETREAT_SAFE dry_run；工作空间边界 pair 能触发 5200/5201/5210 中对应错误 |
+| L3-SIM-03 | 真实 `pair_grasp_execution_node` + MoveIt 2 + ros2_control + Gazebo 轻量物理场景 | 标准 pair 能完成规划、接近、预抓 dry_run；工作空间边界 pair 能触发 5200/5201/5210 中对应错误 |
+| L3-SIM-03-B | L3-SIM-03 + 仿真抓取桥接器 | TCP / box 满足接触或距离条件后创建固定约束；释放时解除约束；失败映射既有抓取错误码 |
 | L3-SIM-04 | sim perception + real navigation adapter + real grasp dry_run | 抓取 adapter 能在完整任务上下文中接收 strategy 选出的 GraspPair，反馈阶段与 mock 保持一致 |
 
 实现约束：
 
 - `dry_run=true` 时只允许规划和运动到安全预抓/验证姿态，不吸附、不搬运真实箱体。
-- MoveIt mock hardware 只在测试 launch 中启用，生产节点仍通过既定 MoveIt / 控制器接口工作。
-- L3-SIM-03 通过后，M2-C03 仍必须跑 L3-M2-GRASP-DRY；仿真只提前暴露 IK/规划边界。
+- MoveIt mock hardware、Gazebo 仿真控制链和仿真抓取桥接器只在测试 launch 中启用，生产节点仍通过既定 MoveIt / 控制器 / vacuum 接口工作。
+- L3-SIM-03 通过后，M2-C03 仍必须跑 L3-M2-GRASP-DRY；仿真只提前暴露 IK、规划、场景碰撞和控制链路配置边界。
 
 ## 4. 错误码约定
 
@@ -150,6 +151,6 @@ M2-SIM 用 MoveIt 2 + ros2_control mock_components 验证 `pair_grasp_execution_
 ## 5. 风险
 
 - 双臂同步规划和单臂 fallback 的决策边界还需要真机工作空间标定。
-- M2-SIM 能提前发现 IK/规划不可达，但不能证明真实控制器跟随、吸附接触和碰撞监控可靠。
+- L3-SIM-03 能提前发现 IK/规划不可达、场景碰撞和控制链路配置问题，但不能证明真实控制器跟随、吸附接触和碰撞监控可靠。
 - 真空压力阈值必须按真实泵、吸盘、箱体材质重新标定，不能沿用 mock 默认值。
 - `dry_run` 真机语义必须冻结：建议只规划和运动到安全预抓位，不吸附、不搬运。

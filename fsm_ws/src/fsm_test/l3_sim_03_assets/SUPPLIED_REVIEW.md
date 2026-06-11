@@ -96,20 +96,18 @@ robot_state_publisher uses backwards-compatible file argument in display.launch.
 base_link has root-link inertia; KDL recommends adding a dummy root link
 ```
 
-Missing before L3-SIM-03 MoveIt dry-run:
+Resolved by the upstream motion-control import:
 
 ```text
 SRDF semantic model
 MoveIt planning groups
-left/right TCP or tool links
+left/right TCP tool links
 kinematics.yaml
 joint_limits.yaml with non-zero velocity/acceleration values
-ompl_planning.yaml
 moveit_controllers.yaml
 ros2_controllers.yaml for mock hardware
-ros2_control or mock_components integration
+ros2_control mock_components integration in xacro
 MoveIt/RViz config
-sample target pairs tied to confirmed tool frames
 ```
 
 Names that need design confirmation:
@@ -125,7 +123,28 @@ supplied URDF currently provides:
   right leaf link: rightjoint6
 ```
 
-Do not silently map `left_v5_tool0` to `leftjoint6` or `right_v5_tool0` to
-`rightjoint6`. The mechanical/control design should confirm the actual TCP
-frames, tool offsets, and naming contract. If needed, add fixed tool links to a
-wrapper xacro or an updated official URDF.
+The latest upstream motion-control code provides the missing V5 semantic layer:
+
+```text
+left_v5_tool0:
+  parent: left_v5_link6
+  fixed origin: xyz="0 0 0.1" rpy="0 0 0"
+
+right_v5_tool0:
+  parent: right_v5_link6
+  fixed origin: xyz="0 0 0.1" rpy="0 0 0"
+```
+
+This is now copied into `robot_description/urdf/alfa_robot_l3_sim.urdf.xacro`.
+The mechanical/control team should still confirm that this 0.1 m fixed offset is
+the intended suction TCP definition.
+
+Still missing before L3-SIM-03 MoveIt dry-run:
+
+```text
+ompl_planning.yaml
+installed xacro package
+installed MoveIt runtime packages
+installed ros2_control / controller_manager packages
+available bio_ik plugin, either installed or built from upstream source
+```

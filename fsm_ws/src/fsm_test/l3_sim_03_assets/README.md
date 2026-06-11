@@ -31,3 +31,7 @@ fsm_ws/src/alfa_robot_v2_arm_v6/
 
 See `SUPPLIED_REVIEW.md` for the import decision, validation result, and the
 remaining MoveIt design gaps.
+
+Additional MoveIt/control files were imported from the latest upstream motion
+control code. See `UPSTREAM_IMPORT.md` for source paths, copied files, local
+adaptations, and remaining runtime dependencies.
