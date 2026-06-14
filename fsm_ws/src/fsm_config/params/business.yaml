@@ -16,6 +16,7 @@
 
       left_phase_cols: [0, 1, 2]
       right_phase_cols: [3, 4]
+      max_adjacent_column_height_delta: 1
 
       match_tolerance:
         y: 0.15

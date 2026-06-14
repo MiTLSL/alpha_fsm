@@ -102,6 +102,7 @@ class WallDestackingStrategyNodeMixin:
         self._left_phase_cols = [int(col) for col in self.config.get("business.left_phase_cols", [0, 1, 2])]
         self._right_phase_cols = [int(col) for col in self.config.get("business.right_phase_cols", [3, 4])]
         self._allow_single_arm = bool(self.config.get("business.allow_single_arm_grasp", True))
+        self._max_adjacent_height_delta = int(self.config.get("business.max_adjacent_column_height_delta", 1))
 
     def on_detections(self, msg):
         self._last_detections_msg = msg
@@ -172,53 +173,70 @@ class WallDestackingStrategyNodeMixin:
             self._grid_slots = await self._run_wall_mapping_fsm(goal_handle)
             self._publish_grid_snapshot()
 
-            for phase, phase_state in ((0, "LEFT_PHASE"), (1, "RIGHT_PHASE")):
-                self._current_phase = phase
-                self.ctx.current_phase = phase_state
-                self._set_wall_state("NAVIGATE_TO_PHASE_WORKPOSE")
-                self._publish_feedback(goal_handle, "NAVIGATE_TO_PHASE_WORKPOSE", self._phase_progress_percent(phase))
-                await self._navigate_to_phase_workpose(goal_handle, phase)
+            self._current_phase = 0
+            self.ctx.current_phase = self._phase_state_name(self._current_phase)
+            self._set_wall_state("NAVIGATE_TO_PHASE_WORKPOSE")
+            self._publish_feedback(goal_handle, "NAVIGATE_TO_PHASE_WORKPOSE", self._wall_progress_percent())
+            await self._navigate_to_phase_workpose(goal_handle, self._current_phase)
 
+            while self._wall_has_occupied_slots():
+                phase = int(self._current_phase)
+                phase_state = self._phase_state_name(phase)
+                self.ctx.current_phase = phase_state
+
+                self._check_cancel_or_estop(goal_handle)
                 self._set_wall_state("RUN_PHASE_PERCEPTION")
-                self._publish_feedback(goal_handle, "RUN_PHASE_PERCEPTION", self._phase_progress_percent(phase))
+                self._publish_feedback(goal_handle, "RUN_PHASE_PERCEPTION", self._wall_progress_percent())
                 await self._run_phase_perception_fsm(goal_handle, phase)
 
-                self._set_wall_state(phase_state)
-                self._publish_feedback(goal_handle, phase_state, self._phase_progress_percent(phase))
-                while self._phase_has_occupied_slots(phase):
-                    self._check_cancel_or_estop(goal_handle)
-                    pair_msg = self._run_pair_selection_fsm(phase, goal_handle.request.fixed_place_pose_robot)
-                    if pair_msg is None:
-                        raise _StrategyFailure(int(ErrorCode.E_PAIR_NO_CANDIDATE), f"no pair candidate in {phase_state}")
-                    self.ctx.current_grasp_pair = pair_msg
-                    self._set_wall_state("DECIDE_NEXT_PAIR")
-                    self._grasp_pair_pub.publish(pair_msg)
-                    self._publish_feedback(goal_handle, "DECIDE_NEXT_PAIR", self._phase_progress_percent(phase))
+                self._set_wall_state("RUN_PAIR_SELECTION")
+                self._publish_feedback(goal_handle, "RUN_PAIR_SELECTION", self._wall_progress_percent())
+                pair_msg = self._run_pair_selection_fsm(phase, goal_handle.request.fixed_place_pose_robot)
+                if pair_msg is None:
+                    raise _StrategyFailure(int(ErrorCode.E_PAIR_NO_CANDIDATE), "no safe pair candidate in wall")
 
-                    self._set_wall_state("WAIT_PAIR_GRASP_RESULT")
-                    self._publish_feedback(goal_handle, "WAIT_PAIR_GRASP_RESULT", self._phase_progress_percent(phase))
-                    grasp_result = await self._execute_pair_grasp(goal_handle, pair_msg, dry_run)
-                    if not grasp_result.success:
-                        code = int(grasp_result.result.error_code or ErrorCode.E_GRASP_UNKNOWN)
-                        reason = grasp_result.result.failed_stage or "pair grasp failed"
-                        retry_count = self._record_pair_failure(pair_msg, code)
-                        max_retry = int(self.config.get("business.max_retry_per_slot", 3))
-                        recovery = await self._run_wall_recovery_fsm(
-                            code,
-                            reason,
-                            retry_count=retry_count,
-                            max_attempts=max_retry,
-                        )
-                        self._publish_grid_snapshot()
-                        if self._should_retry_pair_grasp(recovery, retry_count, max_retry):
-                            self._set_wall_state("RETRY_PAIR_GRASP")
-                            self._publish_feedback(goal_handle, "RETRY_PAIR_GRASP", self._phase_progress_percent(phase))
-                            continue
-                        raise _StrategyFailure(code, reason, recovery)
-                    self._total_boxes_picked += self._mark_pair_removed(pair_msg)
-                    self._set_wall_state("UPDATE_GRID_AFTER_GRASP")
+                selected_phase = int(pair_msg.phase)
+                if selected_phase != phase:
+                    self._set_wall_state("DECIDE_NEXT_PHASE")
+                    self._publish_feedback(goal_handle, "DECIDE_NEXT_PHASE", self._wall_progress_percent())
+                    self._current_phase = selected_phase
+                    self.ctx.current_phase = self._phase_state_name(selected_phase)
+                    self._set_wall_state("NAVIGATE_TO_PHASE_WORKPOSE")
+                    self._publish_feedback(goal_handle, "NAVIGATE_TO_PHASE_WORKPOSE", self._wall_progress_percent())
+                    await self._navigate_to_phase_workpose(goal_handle, selected_phase)
+                    continue
+
+                self.ctx.current_grasp_pair = pair_msg
+                self._set_wall_state("DECIDE_NEXT_PAIR")
+                self._grasp_pair_pub.publish(pair_msg)
+                self._publish_feedback(goal_handle, "DECIDE_NEXT_PAIR", self._wall_progress_percent())
+
+                self._set_wall_state("WAIT_PAIR_GRASP_RESULT")
+                self._publish_feedback(goal_handle, "WAIT_PAIR_GRASP_RESULT", self._wall_progress_percent())
+                grasp_result = await self._execute_pair_grasp(goal_handle, pair_msg, dry_run)
+                removed = self._mark_pair_removed(pair_msg, grasp_result.result)
+                self._total_boxes_picked += removed
+                if not grasp_result.success:
+                    code = int(grasp_result.result.error_code or ErrorCode.E_GRASP_UNKNOWN)
+                    reason = grasp_result.result.failed_stage or "pair grasp failed"
+                    retry_count = self._record_pair_failure(pair_msg, code, grasp_result.result)
+                    max_retry = int(self.config.get("business.max_retry_per_slot", 3))
+                    recovery = await self._run_wall_recovery_fsm(
+                        code,
+                        reason,
+                        retry_count=retry_count,
+                        max_attempts=max_retry,
+                    )
                     self._publish_grid_snapshot()
-                    self._publish_feedback(goal_handle, "UPDATE_GRID_AFTER_GRASP", self._phase_progress_percent(phase))
+                    if self._should_retry_pair_grasp(recovery, retry_count, max_retry):
+                        self._set_wall_state("RETRY_PAIR_GRASP")
+                        self._publish_feedback(goal_handle, "RETRY_PAIR_GRASP", self._wall_progress_percent())
+                        continue
+                    raise _StrategyFailure(code, reason, recovery)
+
+                self._set_wall_state("UPDATE_GRID_AFTER_GRASP")
+                self._publish_grid_snapshot()
+                self._publish_feedback(goal_handle, "UPDATE_GRID_AFTER_GRASP", self._wall_progress_percent())
 
             self._set_wall_state("WALL_DONE")
             self._publish_feedback(goal_handle, "WALL_DONE", 100)
@@ -725,7 +743,7 @@ class WallDestackingStrategyNodeMixin:
             await self._sleep(0.05)
 
         if not occupied_slots:
-            self._set_active_substate("PhasePerceptionFSM", "REPORT", {"matched_slots": 0, "reason": "phase already empty"})
+            self._set_active_substate("PhasePerceptionFSM", "REPORT", {"matched_slots": 0, "reason": "no occupied slot in workpose columns"})
             return
         if received_frames == 0:
             self._set_active_substate("PhasePerceptionFSM", "PERCEPTION_ERROR", {"error_code": int(ErrorCode.E_PERC_LOCAL_SCAN_TIMEOUT)})
@@ -777,39 +795,62 @@ class WallDestackingStrategyNodeMixin:
         self._set_active_substate("PhasePerceptionFSM", "REPORT", {"matched_slots": len(matches), "unseen_slots": unseen})
         self._publish_grid_snapshot()
 
-    def _run_pair_selection_fsm(self, phase: int, fixed_place_pose_robot):
+    def _run_pair_selection_fsm(self, current_phase: int, fixed_place_pose_robot):
         from fsm_core.constants import SlotStatus
         from fsm_core.error_code import ErrorCode
 
-        phase_cols = self._phase_cols(phase)
         max_retry = int(self.config.get("business.max_retry_per_slot", 3))
+        column_heights = self._column_heights()
+        top_slot_ids = self._top_slot_ids_by_column()
         available = [
             slot
             for slot in self._grid_slots
-            if int(slot.col_index) in phase_cols
+            if slot.slot_id in top_slot_ids.values()
             and int(slot.status) == int(SlotStatus.OCCUPIED)
             and bool(slot.visible)
             and int(slot.retry_count) < max_retry
             and self._slot_has_valid_pose(slot)
         ]
-        self._set_active_substate("PairSelectionFSM", "FILTER_AVAILABLE", {"available_slots": len(available), "phase": int(phase)})
+        self._set_active_substate(
+            "PairSelectionFSM",
+            "FILTER_AVAILABLE",
+            {
+                "available_slots": len(available),
+                "current_phase": int(current_phase),
+                "column_heights": column_heights,
+            },
+        )
         if not available:
             self._set_active_substate("PairSelectionFSM", "REPORT", {"pair_id": "", "reason": "no available slot"})
             return None
+
         available.sort(key=lambda slot: (int(slot.row_index), int(slot.col_index)))
-        self._set_active_substate("PairSelectionFSM", "SORT_BY_PRIORITY", {"available_slots": len(available)})
-        candidates, single_blocked = self._build_pair_candidates(phase, available)
+        self._set_active_substate(
+            "PairSelectionFSM",
+            "SORT_BY_PRIORITY",
+            {"available_slots": len(available), "priority": "phase-local top then left"},
+        )
+
+        candidates_by_phase = {}
+        single_blocked_by_phase = {}
+        for phase in (0, 1):
+            candidates, single_blocked = self._build_pair_candidates(phase, available)
+            candidates_by_phase[int(phase)] = candidates
+            single_blocked_by_phase[int(phase)] = single_blocked
+        candidate_count = sum(len(candidates) for candidates in candidates_by_phase.values())
         self._set_active_substate(
             "PairSelectionFSM",
             "BUILD_CANDIDATES",
             {
                 "allow_single_arm": bool(self._allow_single_arm),
-                "candidate_count": len(candidates),
-                "single_not_allowed": bool(single_blocked),
+                "candidate_count": candidate_count,
+                "left_candidate_count": len(candidates_by_phase[0]),
+                "right_candidate_count": len(candidates_by_phase[1]),
+                "single_not_allowed": any(single_blocked_by_phase.values()),
             },
         )
-        if not candidates:
-            if single_blocked:
+        if not candidate_count:
+            if any(single_blocked_by_phase.values()):
                 self._set_active_substate(
                     "PairSelectionFSM",
                     "PAIR_SELECTION_ERROR",
@@ -819,19 +860,52 @@ class WallDestackingStrategyNodeMixin:
             self._set_active_substate("PairSelectionFSM", "PAIR_SELECTION_ERROR", {"reason": "no candidate"})
             return None
 
+        safe_by_phase = {}
+        safety_rejections = []
+        for phase, candidates in candidates_by_phase.items():
+            safe_candidate, phase_rejections = self._first_safe_candidate(candidates, column_heights)
+            safe_by_phase[int(phase)] = safe_candidate
+            safety_rejections.extend(phase_rejections)
+        self._set_active_substate(
+            "PairSelectionFSM",
+            "CHECK_HEIGHT_SAFETY",
+            {
+                "max_adjacent_delta": int(getattr(self, "_max_adjacent_height_delta", self.config.get("business.max_adjacent_column_height_delta", 1))),
+                "left_safe": safe_by_phase[0] is not None,
+                "right_safe": safe_by_phase[1] is not None,
+                "rejection_reasons": safety_rejections[:6],
+            },
+        )
+
+        selected_phase = self._select_preferred_phase(current_phase, safe_by_phase)
+        if selected_phase is None:
+            self._set_active_substate(
+                "PairSelectionFSM",
+                "PAIR_SELECTION_ERROR",
+                {
+                    "error_code": int(ErrorCode.E_PAIR_NO_CANDIDATE),
+                    "reason": "no height-safe candidate",
+                    "column_heights": column_heights,
+                    "rejection_reasons": safety_rejections[:6],
+                },
+            )
+            return None
+
         rejection_reasons = []
         selected = None
-        for candidate in candidates:
+        for candidate in self._reachable_candidate_order(selected_phase, safe_by_phase, candidates_by_phase, column_heights):
             reachable, reason = self._pair_candidate_reachable(candidate)
             if reachable:
                 selected = candidate
+                selected_phase = int(candidate["phase"])
                 break
             rejection_reasons.append(reason)
         self._set_active_substate(
             "PairSelectionFSM",
             "VALIDATE_REACHABILITY",
             {
-                "candidate_count": len(candidates),
+                "selected_phase": int(selected_phase),
+                "candidate_count": candidate_count,
                 "reachable": selected is not None,
                 "rejection_reasons": rejection_reasons[:4],
             },
@@ -844,7 +918,7 @@ class WallDestackingStrategyNodeMixin:
             )
             raise _StrategyFailure(int(ErrorCode.E_PAIR_NO_REACHABLE), "no reachable pair candidate")
 
-        pair_msg = self._make_pair_from_candidate(selected, phase, fixed_place_pose_robot)
+        pair_msg = self._make_pair_from_candidate(selected, int(selected["phase"]), fixed_place_pose_robot)
         self._set_active_substate("PairSelectionFSM", "CHECK_DUAL_ARM_CONFLICT", {"grasp_mode": int(pair_msg.grasp_mode)})
         self._set_active_substate(
             "PairSelectionFSM",
@@ -1120,32 +1194,167 @@ class WallDestackingStrategyNodeMixin:
 
         candidates = []
         single_blocked = False
+        phase_slots = [slot for slot in available_slots if int(slot.col_index) in self._phase_cols(phase)]
         for row in range(self._rows):
-            row_slots = [slot for slot in available_slots if int(slot.row_index) == row]
+            row_slots = [slot for slot in phase_slots if int(slot.row_index) == row]
             row_slots.sort(key=lambda slot: int(slot.col_index))
             if len(row_slots) >= 2:
                 for index in range(len(row_slots) - 1):
-                    left_slot, right_slot = sorted(
-                        row_slots[index : index + 2],
-                        key=lambda slot: float(slot.latest_pose_robot.pose.position.y),
-                        reverse=True,
+                    pair_slots = row_slots[index : index + 2]
+                    if int(pair_slots[1].col_index) != int(pair_slots[0].col_index) + 1:
+                        continue
+                    left_slot, right_slot = self._assign_candidate_slots_by_y(pair_slots)
+                    candidates.append(
+                        {
+                            "phase": int(phase),
+                            "mode": GraspMode.DUAL,
+                            "left_slot": left_slot,
+                            "right_slot": right_slot,
+                        }
                     )
-                    candidates.append({"mode": GraspMode.DUAL, "left_slot": left_slot, "right_slot": right_slot})
+
+        for slot in phase_slots:
+            if not self._allow_single_arm:
+                single_blocked = True
                 continue
-            if len(row_slots) == 1:
-                if not self._allow_single_arm:
-                    single_blocked = True
-                    continue
-                mode = GraspMode.LEFT_ONLY if phase == int(Phase.LEFT) else GraspMode.RIGHT_ONLY
-                slot = row_slots[0]
-                candidates.append(
-                    {
-                        "mode": mode,
-                        "left_slot": slot if mode == GraspMode.LEFT_ONLY else None,
-                        "right_slot": slot if mode == GraspMode.RIGHT_ONLY else None,
-                    }
-                )
+            mode = GraspMode.LEFT_ONLY if phase == int(Phase.LEFT) else GraspMode.RIGHT_ONLY
+            candidates.append(
+                {
+                    "phase": int(phase),
+                    "mode": mode,
+                    "left_slot": slot if mode == GraspMode.LEFT_ONLY else None,
+                    "right_slot": slot if mode == GraspMode.RIGHT_ONLY else None,
+                }
+            )
+        candidates.sort(key=lambda candidate: self._candidate_priority_key(candidate))
         return candidates, single_blocked
+
+    def _assign_candidate_slots_by_y(self, slots):
+        left_slot, right_slot = sorted(
+            slots,
+            key=lambda slot: float(slot.latest_pose_robot.pose.position.y),
+            reverse=True,
+        )
+        return left_slot, right_slot
+
+    def _candidate_priority_key(self, candidate: dict) -> tuple[int, int, int, int]:
+        slots = self._candidate_slots(candidate)
+        top_row = min(int(slot.row_index) for slot in slots)
+        left_col = min(int(slot.col_index) for slot in slots)
+        return (top_row, left_col, 0 if self._candidate_is_dual(candidate) else 1, int(candidate["phase"]))
+
+    def _candidate_slots(self, candidate: dict) -> list[object]:
+        return [slot for slot in (candidate.get("left_slot"), candidate.get("right_slot")) if slot is not None]
+
+    def _candidate_is_dual(self, candidate: dict) -> bool:
+        from fsm_core.constants import GraspMode
+
+        return int(candidate.get("mode", -1)) == int(GraspMode.DUAL)
+
+    def _candidate_columns(self, candidate: dict) -> tuple[int, ...]:
+        return tuple(sorted({int(slot.col_index) for slot in self._candidate_slots(candidate)}))
+
+    def _first_safe_candidate(self, candidates: list[dict], column_heights: list[int]) -> tuple[dict | None, list[str]]:
+        rejections = []
+        for candidate in candidates:
+            safe, reason = self._candidate_height_safe(candidate, column_heights)
+            if safe:
+                return candidate, rejections
+            rejections.append(reason)
+        return None, rejections
+
+    def _candidate_height_safe(self, candidate: dict, column_heights: list[int]) -> tuple[bool, str]:
+        after = self._simulate_candidate_heights(column_heights, candidate)
+        if after is None:
+            return False, f"{self._candidate_label(candidate)}:invalid_height"
+        if not self._heights_safe(after):
+            return False, f"{self._candidate_label(candidate)}:{column_heights}->{after}"
+        if self._candidate_is_dual(candidate):
+            for col in self._candidate_columns(candidate):
+                partial_after = self._simulate_columns(column_heights, (col,))
+                if partial_after is None or not self._heights_safe(partial_after):
+                    return False, f"{self._candidate_label(candidate)}:partial_col_{col}:{column_heights}->{partial_after}"
+        return True, "height_safe"
+
+    def _simulate_candidate_heights(self, column_heights: list[int], candidate: dict) -> list[int] | None:
+        return self._simulate_columns(column_heights, self._candidate_columns(candidate))
+
+    def _simulate_columns(self, column_heights: list[int], columns: tuple[int, ...]) -> list[int] | None:
+        heights = list(column_heights)
+        for col in columns:
+            if col < 0 or col >= len(heights) or heights[col] <= 0:
+                return None
+            heights[col] -= 1
+        return heights
+
+    def _heights_safe(self, heights: list[int]) -> bool:
+        max_delta = int(getattr(self, "_max_adjacent_height_delta", self.config.get("business.max_adjacent_column_height_delta", 1)))
+        return all(abs(int(heights[col]) - int(heights[col + 1])) <= max_delta for col in range(len(heights) - 1))
+
+    def _candidate_label(self, candidate: dict) -> str:
+        slot_ids = ",".join(slot.slot_id for slot in self._candidate_slots(candidate))
+        return f"p{int(candidate.get('phase', -1))}:{slot_ids}"
+
+    def _select_preferred_phase(self, current_phase: int, safe_by_phase: dict[int, dict | None]) -> int | None:
+        if safe_by_phase.get(int(current_phase)) is not None:
+            return int(current_phase)
+        other_phase = 1 - int(current_phase)
+        if safe_by_phase.get(other_phase) is not None:
+            return other_phase
+        return None
+
+    def _reachable_candidate_order(
+        self,
+        selected_phase: int,
+        safe_by_phase: dict[int, dict | None],
+        candidates_by_phase: dict[int, list[dict]],
+        column_heights: list[int],
+    ) -> list[dict]:
+        ordered = []
+        phases = [int(selected_phase), 1 - int(selected_phase)]
+        for phase in phases:
+            first_safe = safe_by_phase.get(phase)
+            if first_safe is not None:
+                ordered.append(first_safe)
+                for candidate in candidates_by_phase.get(phase, []):
+                    if candidate is first_safe:
+                        continue
+                    safe, _ = self._candidate_height_safe(candidate, column_heights)
+                    if safe:
+                        ordered.append(candidate)
+        return ordered
+
+    def _column_heights(self) -> list[int]:
+        from fsm_core.constants import SlotStatus
+
+        removed = int(SlotStatus.REMOVED)
+        heights = [0 for _ in range(self._cols)]
+        for col in range(self._cols):
+            occupied_like_rows = [
+                int(slot.row_index)
+                for slot in self._grid_slots
+                if int(slot.col_index) == col and int(slot.status) != removed
+            ]
+            if occupied_like_rows:
+                heights[col] = self._rows - min(occupied_like_rows)
+        return heights
+
+    def _top_slot_ids_by_column(self) -> dict[int, str]:
+        from fsm_core.constants import SlotStatus
+
+        removed = int(SlotStatus.REMOVED)
+        result = {}
+        for col in range(self._cols):
+            candidates = [
+                slot
+                for slot in self._grid_slots
+                if int(slot.col_index) == col and int(slot.status) != removed
+            ]
+            if not candidates:
+                continue
+            top = min(candidates, key=lambda slot: int(slot.row_index))
+            result[col] = top.slot_id
+        return result
 
     def _make_pair_from_candidate(self, candidate: dict, phase: int, fixed_place_pose_robot):
         from fsm_msgs.msg import GraspPair
@@ -1223,10 +1432,10 @@ class WallDestackingStrategyNodeMixin:
             pair.right_box_size = self._copy_vector3(self._slot_sizes_by_id.get(right_slot.slot_id))
         return pair
 
-    def _mark_pair_removed(self, pair_msg) -> int:
+    def _mark_pair_removed(self, pair_msg, pair_result=None) -> int:
         from fsm_core.constants import SlotStatus
 
-        active_slot_ids = self._pair_active_slot_ids(pair_msg)
+        active_slot_ids = self._pair_success_slot_ids(pair_msg, pair_result)
         removed = 0
         for slot in self._grid_slots:
             if slot.slot_id in active_slot_ids and int(slot.status) == int(SlotStatus.OCCUPIED):
@@ -1245,8 +1454,22 @@ class WallDestackingStrategyNodeMixin:
             active_slot_ids.append(pair_msg.right_slot_id)
         return active_slot_ids
 
-    def _record_pair_failure(self, pair_msg, error_code: int) -> int:
-        active_slot_ids = set(self._pair_active_slot_ids(pair_msg))
+    def _pair_success_slot_ids(self, pair_msg, pair_result=None) -> list[str]:
+        from fsm_core.constants import ResultCode
+
+        if pair_result is None:
+            return self._pair_active_slot_ids(pair_msg)
+        result_code = int(getattr(pair_result, "result_code", ResultCode.FAILED_BOTH))
+        if result_code == int(ResultCode.SUCCESS_BOTH):
+            return self._pair_active_slot_ids(pair_msg)
+        if result_code == int(ResultCode.SUCCESS_LEFT_ONLY):
+            return [pair_msg.left_slot_id] if pair_msg.left_slot_id else []
+        if result_code == int(ResultCode.SUCCESS_RIGHT_ONLY):
+            return [pair_msg.right_slot_id] if pair_msg.right_slot_id else []
+        return []
+
+    def _record_pair_failure(self, pair_msg, error_code: int, pair_result=None) -> int:
+        active_slot_ids = set(self._pair_active_slot_ids(pair_msg)) - set(self._pair_success_slot_ids(pair_msg, pair_result))
         if not active_slot_ids:
             return int(self.config.get("business.max_retry_per_slot", 3))
         max_retry_count = 0
@@ -1272,6 +1495,11 @@ class WallDestackingStrategyNodeMixin:
         phase_cols = self._phase_cols(phase)
         return any(int(slot.status) == int(SlotStatus.OCCUPIED) and int(slot.col_index) in phase_cols for slot in self._grid_slots)
 
+    def _wall_has_occupied_slots(self) -> bool:
+        from fsm_core.constants import SlotStatus
+
+        return any(int(slot.status) == int(SlotStatus.OCCUPIED) for slot in self._grid_slots)
+
     def _phase_progress_percent(self, phase: int) -> int:
         from fsm_core.constants import SlotStatus
 
@@ -1281,6 +1509,17 @@ class WallDestackingStrategyNodeMixin:
             return 0
         removed = sum(1 for slot in phase_slots if int(slot.status) == int(SlotStatus.REMOVED))
         return int(round(100.0 * removed / len(phase_slots)))
+
+    def _wall_progress_percent(self) -> int:
+        from fsm_core.constants import SlotStatus
+
+        if not self._grid_slots:
+            return 0
+        removed = sum(1 for slot in self._grid_slots if int(slot.status) == int(SlotStatus.REMOVED))
+        return int(round(100.0 * removed / len(self._grid_slots)))
+
+    def _phase_state_name(self, phase: int) -> str:
+        return "LEFT_PHASE" if int(phase) == 0 else "RIGHT_PHASE"
 
     def _phase_cols(self, phase: int) -> list[int]:
         return self._left_phase_cols if int(phase) == 0 else self._right_phase_cols

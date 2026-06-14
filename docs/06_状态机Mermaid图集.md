@@ -93,12 +93,9 @@ stateDiagram
     RUN_WALL_MAPPING --> CHECK_WALL_VALID: 建网成功
     RUN_WALL_MAPPING --> WALL_ERROR_HANDLE: 建网失败
 
-    CHECK_WALL_VALID --> SELECT_PHASE: grid 有效
+    CHECK_WALL_VALID --> NAVIGATE_TO_PHASE_WORKPOSE: grid 有效
     CHECK_WALL_VALID --> VERIFY_TASK_COMPLETE: 无新墙
     CHECK_WALL_VALID --> WALL_ERROR_HANDLE: grid 不可用
-
-    SELECT_PHASE --> NAVIGATE_TO_PHASE_WORKPOSE
-    SELECT_PHASE --> DECIDE_NEXT_WALL: 两 phase 都已完成
 
     NAVIGATE_TO_PHASE_WORKPOSE --> RUN_PHASE_PERCEPTION: 到位+对齐
     NAVIGATE_TO_PHASE_WORKPOSE --> WALL_ERROR_HANDLE: 失败
@@ -107,7 +104,7 @@ stateDiagram
     RUN_PHASE_PERCEPTION --> WALL_ERROR_HANDLE: 失败
 
     RUN_PAIR_SELECTION --> DISPATCH_PAIR_GRASP: 选出 pair
-    RUN_PAIR_SELECTION --> DECIDE_NEXT_PHASE: 无候选(正常完成信号)
+    RUN_PAIR_SELECTION --> DECIDE_NEXT_PHASE: 推荐另一作业位
     RUN_PAIR_SELECTION --> WALL_ERROR_HANDLE: 选取失败
 
     DISPATCH_PAIR_GRASP --> WAIT_PAIR_GRASP_RESULT: goal 已发
@@ -118,11 +115,10 @@ stateDiagram
     UPDATE_GRID_AFTER_GRASP --> DECIDE_NEXT_PAIR
     UPDATE_GRID_AFTER_GRASP --> WALL_ERROR_HANDLE: 掉箱等 FATAL
 
-    DECIDE_NEXT_PAIR --> RUN_PHASE_PERCEPTION: 当前 phase 还有
-    DECIDE_NEXT_PAIR --> DECIDE_NEXT_PHASE: 当前 phase 完
+    DECIDE_NEXT_PAIR --> RUN_PHASE_PERCEPTION: wall 仍有箱
+    DECIDE_NEXT_PAIR --> DECIDE_NEXT_WALL: wall 无 OCCUPIED
 
-    DECIDE_NEXT_PHASE --> NAVIGATE_TO_PHASE_WORKPOSE: LEFT 完→RIGHT
-    DECIDE_NEXT_PHASE --> DECIDE_NEXT_WALL: RIGHT 完
+    DECIDE_NEXT_PHASE --> NAVIGATE_TO_PHASE_WORKPOSE: 切换到推荐作业位
 
     DECIDE_NEXT_WALL --> NAVIGATE_TO_OBSERVATION_POSE: 进下一面墙
     DECIDE_NEXT_WALL --> VERIFY_TASK_COMPLETE: 达到 max_walls
@@ -438,7 +434,7 @@ sequenceDiagram
     ST->>NV: Action: navigate(LEFT_PHASE)
     NV-->>ST: Result(success)
     Note over ST: PhasePerceptionFSM 开窗收 5 帧 + 匹配
-    Note over ST: PairSelectionFSM 选 pair
+    Note over ST: PairSelectionFSM 同时评估左右作业位，按高度安全过滤
     ST->>GR: Action: execute_pair_grasp(pair)
     GR->>VI: Topic: /vacuum/cmd
     VI-->>GR: Topic: /vacuum/pressure_raw
@@ -446,9 +442,9 @@ sequenceDiagram
     GR-->>ST: Result(SUCCESS_BOTH)
     Note over ST: UPDATE_GRID + DECIDE_NEXT_PAIR
     ST->>ST: 继续下一 pair...
-    Note over ST: 直到当前 phase 完成
+    Note over ST: 若推荐另一作业位，则导航切换并重新局部感知
     ST->>NV: Action: navigate(RIGHT_PHASE)
-    Note over ST: 重复直到 wall 完成
+    Note over ST: 重复直到 wall 无 OCCUPIED
     Note over ST: 多帧无箱确认
     ST-->>TM: Action Result(success)
     TM-->>U: /task/start response

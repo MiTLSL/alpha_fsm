@@ -93,6 +93,7 @@ class _StrategyHarness(WallDestackingStrategyNodeMixin):
         self._left_phase_cols = [0, 1, 2]
         self._right_phase_cols = [3, 4]
         self._allow_single_arm = bool(self.config.get("business.allow_single_arm_grasp", True))
+        self._max_adjacent_height_delta = int(self.config.get("business.max_adjacent_column_height_delta", 1))
         self._grid_slots = []
         self._slot_sizes_by_id = {}
         self._current_task_id = "task001"
@@ -138,6 +139,22 @@ def _make_slot(row: int, col: int, x: float = 0.6, y: float | None = None, z: fl
     )
     slot.expected_pose_robot = make_pose_stamped("base_link", x, 0.0, 0.0)
     return slot
+
+
+def _make_slots_for_heights(heights: list[int]) -> list[GridSlotState]:
+    slots = []
+    for row in range(5):
+        for col, height in enumerate(heights):
+            top_row = 5 - int(height)
+            slot = _make_slot(row, col)
+            if row < top_row:
+                slot.status = int(SlotStatus.REMOVED)
+                slot.visible = False
+            else:
+                slot.status = int(SlotStatus.OCCUPIED)
+                slot.visible = row == top_row
+            slots.append(slot)
+    return slots
 
 
 class TestTaskManagerStates(unittest.TestCase):
@@ -275,7 +292,7 @@ class TestPairSelectionStateMachine(unittest.TestCase):
         )
         harness._grid_slots = [_make_slot(row, col) for row in range(5) for col in range(5)]
 
-        pair = harness._run_pair_selection_fsm(phase=0, fixed_place_pose_robot=make_pose_stamped("base_link", 0.5, 0.0, 0.8))
+        pair = harness._run_pair_selection_fsm(current_phase=0, fixed_place_pose_robot=make_pose_stamped("base_link", 0.5, 0.0, 0.8))
 
         self.assertEqual(pair.grasp_mode, int(GraspMode.DUAL))
         self.assertEqual(pair.left_slot_id, "wall_0_row_0_col_0")
@@ -304,7 +321,7 @@ class TestPairSelectionStateMachine(unittest.TestCase):
         harness._grid_slots = [_make_slot(0, 0)]
 
         with self.assertRaises(_StrategyFailure) as ctx:
-            harness._run_pair_selection_fsm(phase=0, fixed_place_pose_robot=make_pose_stamped("base_link", 0.5, 0.0, 0.8))
+            harness._run_pair_selection_fsm(current_phase=0, fixed_place_pose_robot=make_pose_stamped("base_link", 0.5, 0.0, 0.8))
 
         self.assertEqual(ctx.exception.error_code, int(ErrorCode.E_PAIR_SINGLE_NOT_ALLOWED))
 
@@ -325,9 +342,82 @@ class TestPairSelectionStateMachine(unittest.TestCase):
                 "business.right_arm_workspace.z_max": 1.0,
             }
         )
-        harness._grid_slots = [_make_slot(0, 0, x=1.5, y=0.8, z=1.8), _make_slot(0, 1, x=1.5, y=0.4, z=1.8)]
+        harness._grid_slots = [
+            _make_slot(row, col, x=1.5, y=(2 - col) * 0.4, z=1.8 - row * 0.4)
+            for row in range(5)
+            for col in range(5)
+        ]
 
         with self.assertRaises(_StrategyFailure) as ctx:
-            harness._run_pair_selection_fsm(phase=0, fixed_place_pose_robot=make_pose_stamped("base_link", 0.5, 0.0, 0.8))
+            harness._run_pair_selection_fsm(current_phase=0, fixed_place_pose_robot=make_pose_stamped("base_link", 0.5, 0.0, 0.8))
 
         self.assertEqual(ctx.exception.error_code, int(ErrorCode.E_PAIR_NO_REACHABLE))
+
+    def test_l0_pair_04_keeps_current_phase_when_safe_and_downgrades_unsafe_dual_to_single(self):
+        harness = _StrategyHarness(
+            {
+                "business.left_arm_workspace.x_min": 0.0,
+                "business.left_arm_workspace.x_max": 1.5,
+                "business.left_arm_workspace.y_min": -1.5,
+                "business.left_arm_workspace.y_max": 1.5,
+                "business.left_arm_workspace.z_min": 0.0,
+                "business.left_arm_workspace.z_max": 2.5,
+                "business.right_arm_workspace.x_min": 0.0,
+                "business.right_arm_workspace.x_max": 1.5,
+                "business.right_arm_workspace.y_min": -1.5,
+                "business.right_arm_workspace.y_max": 1.5,
+                "business.right_arm_workspace.z_min": 0.0,
+                "business.right_arm_workspace.z_max": 2.5,
+            }
+        )
+        harness._grid_slots = _make_slots_for_heights([0, 1, 1, 2, 1])
+
+        pair = harness._run_pair_selection_fsm(current_phase=0, fixed_place_pose_robot=make_pose_stamped("base_link", 0.5, 0.0, 0.8))
+
+        self.assertEqual(pair.phase, 0)
+        self.assertEqual(pair.grasp_mode, int(GraspMode.LEFT_ONLY))
+        self.assertEqual(pair.left_slot_id, "wall_0_row_4_col_1")
+        self.assertEqual(harness._simulate_candidate_heights([0, 1, 1, 2, 1], {"left_slot": harness._grid_slots[4 * 5 + 1]}), [0, 0, 1, 2, 1])
+
+    def test_l0_pair_05_switches_phase_when_current_phase_would_break_column_height_safety(self):
+        harness = _StrategyHarness(
+            {
+                "business.left_arm_workspace.x_min": 0.0,
+                "business.left_arm_workspace.x_max": 1.5,
+                "business.left_arm_workspace.y_min": -1.5,
+                "business.left_arm_workspace.y_max": 1.5,
+                "business.left_arm_workspace.z_min": 0.0,
+                "business.left_arm_workspace.z_max": 2.5,
+                "business.right_arm_workspace.x_min": 0.0,
+                "business.right_arm_workspace.x_max": 1.5,
+                "business.right_arm_workspace.y_min": -1.5,
+                "business.right_arm_workspace.y_max": 1.5,
+                "business.right_arm_workspace.z_min": 0.0,
+                "business.right_arm_workspace.z_max": 2.5,
+            }
+        )
+        harness._grid_slots = _make_slots_for_heights([0, 0, 1, 2, 1])
+
+        pair = harness._run_pair_selection_fsm(current_phase=0, fixed_place_pose_robot=make_pose_stamped("base_link", 0.5, 0.0, 0.8))
+
+        self.assertEqual(pair.phase, 1)
+        self.assertEqual(pair.grasp_mode, int(GraspMode.RIGHT_ONLY))
+        self.assertEqual(pair.right_slot_id, "wall_0_row_3_col_3")
+
+    def test_l0_pair_06_single_side_success_only_removes_successful_slot(self):
+        from fsm_core.constants import ResultCode
+
+        harness = _StrategyHarness()
+        harness._grid_slots = [_make_slot(0, 0), _make_slot(0, 1)]
+        pair = SimpleNamespace(
+            grasp_mode=int(GraspMode.DUAL),
+            left_slot_id=harness._grid_slots[0].slot_id,
+            right_slot_id=harness._grid_slots[1].slot_id,
+        )
+        result = SimpleNamespace(result_code=int(ResultCode.SUCCESS_LEFT_ONLY))
+
+        removed = harness._mark_pair_removed(pair, result)
+
+        self.assertEqual(removed, 1)
+        self.assertEqual(harness._grid_slots[0].status, int(SlotStatus.REMOVED))
+        self.assertEqual(harness._grid_slots[1].status, int(SlotStatus.OCCUPIED))

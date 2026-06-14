@@ -381,9 +381,11 @@ Service：
 | L0-DAT-02 | `grasp_pair` | 单臂模式下未使用 slot 字段全 0；左手 Y > 右手 Y 不变式 |
 | L0-MAP-01 | WallMappingFSM 算法 | RANSAC 拟合 wall_frame：给定 25 个标准箱中心点能拟出朝向 |
 | L0-MAP-02 | 同上 | 缺失 5 个 box（INSUFFICIENT_DETECTION）时拟合失败返 3111 |
-| L0-PAIR-01 | PairSelectionFSM | 给定 5×5 grid、左 phase 满，按 row 升序选出第一对 |
+| L0-PAIR-01 | PairSelectionFSM | 给定 5×5 grid，当前作业位与另一作业位均安全时优先当前作业位，并按作业位内上层、左侧优先选出第一对 |
 | L0-PAIR-02 | 同上 | 仅剩 1 个箱 + allow_single=false → 返回 3340 |
 | L0-PAIR-03 | 同上 | 候选都不可达 → 返回 3310 |
+| L0-PAIR-04 | 同上 | 双抓会破坏相邻列高度安全时，allow_single=true 自动降级为单抓 |
+| L0-PAIR-05 | 同上 | 当前 phase 推荐抓取会造成相邻列高度差 >1，另一 phase 安全 → 推荐切换另一 phase |
 | L0-CLR-01 | `clear_error` 协议 | 五阶段顺序的状态机：每阶段失败时 stage_reached 正确 |
 
 ### 8.2 L1 节点单元测试（launch_pytest，单节点）
@@ -435,7 +437,7 @@ Service：
 
 | 用例 ID | 场景 | 步骤 / 预期 |
 |---|---|---|
-| L3-E2E-01 | 单墙 happy（左 phase 完成、右 phase 完成、wall 完成）| `/task/start` → 完整跑；mock_perception 在 mode=OBSERVATION→LEFT_PHASE→RIGHT_PHASE→EMPTY 之间切换；最后任务 success=true |
+| L3-E2E-01 | 单墙 happy（动态 phase 作业位切换、wall 完成）| `/task/start` → 完整跑；PairSelection 按当前作业位优先和相邻列高度安全约束动态切换 LEFT/RIGHT_PHASE；最后任务 success=true |
 | L3-E2E-02 | 中途单 pair 失败 + 重试成功 | mock_pair_grasp 第一次注入 IK_FAIL，第二次 happy → 最终 wall 完成 |
 | L3-E2E-03 | 中途急停 + 清错 + 续跑 | 任务进行中按急停 → strategy abort → /clear_error 五阶段 → SELF_CHECK → STANDBY → /task/start 重新跑 |
 | L3-E2E-04 | 中途任务取消 | `/task/cancel` → strategy cancel pair_grasp_action → 任务返回 CANCELLED |

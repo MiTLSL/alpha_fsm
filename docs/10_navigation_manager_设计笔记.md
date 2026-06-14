@@ -44,7 +44,7 @@
 
 输入来自 `wall_destacking_strategy_node`，包括：
 
-- `goal_type`：观察位、左 phase 工位、右 phase 工位。
+- `goal_type`：观察位、左作业位、右作业位（接口枚举仍为 `LEFT_PHASE` / `RIGHT_PHASE`）。
 - `target_pose`
 - `phase`
 - `require_fine_alignment`
