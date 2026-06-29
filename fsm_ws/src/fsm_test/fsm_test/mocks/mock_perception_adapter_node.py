@@ -133,7 +133,7 @@ def main(args=None):
             self.declare_parameter("mode", "OBSERVATION")
             self.on_config_reloaded()
             self._left_phase_cols = [int(col) for col in self.config.get("business.left_phase_cols", [0, 1, 2])]
-            self._right_phase_cols = [int(col) for col in self.config.get("business.right_phase_cols", [3, 4])]
+            self._right_phase_cols = [int(col) for col in self.config.get("business.right_phase_cols", [2, 3, 4])]
             self._publish_rate_hz = float(self.config.get("business.perception_adapter.publish_rate_hz", 10.0))
             self._frame_seq = 0
             self._detections_pub = self.create_publisher(

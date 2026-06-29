@@ -91,7 +91,7 @@ class _StrategyHarness(WallDestackingStrategyNodeMixin):
         self._rows = int(self.config.get("business.grid_shape.rows", 5))
         self._cols = int(self.config.get("business.grid_shape.cols", 5))
         self._left_phase_cols = [0, 1, 2]
-        self._right_phase_cols = [3, 4]
+        self._right_phase_cols = [2, 3, 4]
         self._allow_single_arm = bool(self.config.get("business.allow_single_arm_grasp", True))
         self._max_adjacent_height_delta = int(self.config.get("business.max_adjacent_column_height_delta", 1))
         self._grid_slots = []
@@ -273,7 +273,7 @@ class TestTaskManagerStates(unittest.TestCase):
 
 
 class TestPairSelectionStateMachine(unittest.TestCase):
-    def test_l0_pair_01_selects_first_reachable_dual_pair_in_row_order(self):
+    def test_l0_pair_01_selects_global_optimal_non_adjacent_dual_pair(self):
         harness = _StrategyHarness(
             {
                 "business.left_arm_workspace.x_min": 0.0,
@@ -296,7 +296,7 @@ class TestPairSelectionStateMachine(unittest.TestCase):
 
         self.assertEqual(pair.grasp_mode, int(GraspMode.DUAL))
         self.assertEqual(pair.left_slot_id, "wall_0_row_0_col_0")
-        self.assertEqual(pair.right_slot_id, "wall_0_row_0_col_1")
+        self.assertEqual(pair.right_slot_id, "wall_0_row_0_col_2")
         self.assertEqual(pair.phase, 0)
         self.assertTrue(pair.pair_id.startswith("task001_w0_p0_"))
 
@@ -401,10 +401,37 @@ class TestPairSelectionStateMachine(unittest.TestCase):
         pair = harness._run_pair_selection_fsm(current_phase=0, fixed_place_pose_robot=make_pose_stamped("base_link", 0.5, 0.0, 0.8))
 
         self.assertEqual(pair.phase, 1)
-        self.assertEqual(pair.grasp_mode, int(GraspMode.RIGHT_ONLY))
+        self.assertEqual(pair.grasp_mode, int(GraspMode.DUAL))
+        self.assertEqual(pair.left_slot_id, "wall_0_row_4_col_2")
         self.assertEqual(pair.right_slot_id, "wall_0_row_3_col_3")
 
-    def test_l0_pair_06_single_side_success_only_removes_successful_slot(self):
+    def test_l0_pair_06_right_phase_can_cover_overlap_column_two(self):
+        harness = _StrategyHarness(
+            {
+                "business.left_arm_workspace.x_min": 0.0,
+                "business.left_arm_workspace.x_max": 1.5,
+                "business.left_arm_workspace.y_min": -1.5,
+                "business.left_arm_workspace.y_max": 1.5,
+                "business.left_arm_workspace.z_min": 0.0,
+                "business.left_arm_workspace.z_max": 2.5,
+                "business.right_arm_workspace.x_min": 0.0,
+                "business.right_arm_workspace.x_max": 1.5,
+                "business.right_arm_workspace.y_min": -1.5,
+                "business.right_arm_workspace.y_max": 1.5,
+                "business.right_arm_workspace.z_min": 0.0,
+                "business.right_arm_workspace.z_max": 2.5,
+            }
+        )
+        harness._grid_slots = _make_slots_for_heights([0, 0, 1, 1, 0])
+
+        pair = harness._run_pair_selection_fsm(current_phase=1, fixed_place_pose_robot=make_pose_stamped("base_link", 0.5, 0.0, 0.8))
+
+        self.assertEqual(pair.phase, 1)
+        self.assertEqual(pair.grasp_mode, int(GraspMode.DUAL))
+        self.assertEqual(pair.left_slot_id, "wall_0_row_4_col_2")
+        self.assertEqual(pair.right_slot_id, "wall_0_row_4_col_3")
+
+    def test_l0_pair_07_single_side_success_only_removes_successful_slot(self):
         from fsm_core.constants import ResultCode
 
         harness = _StrategyHarness()

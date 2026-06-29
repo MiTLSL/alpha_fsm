@@ -3,8 +3,9 @@ from __future__ import annotations
 import json
 import math
 import time
+from itertools import combinations
 
-from .algorithms import AABB, assign_grid_indices_by_yz, fit_wall_plane_ransac, point_in_aabb
+from .algorithms import AABB, assign_grid_indices_by_yz, fit_wall_plane_ransac, plan_global_grasp_sequence, point_in_aabb
 
 
 class _StrategyCancelled(Exception):
@@ -100,7 +101,7 @@ class WallDestackingStrategyNodeMixin:
         self._rows = int(self.config.get("business.grid_shape.rows", 5))
         self._cols = int(self.config.get("business.grid_shape.cols", 5))
         self._left_phase_cols = [int(col) for col in self.config.get("business.left_phase_cols", [0, 1, 2])]
-        self._right_phase_cols = [int(col) for col in self.config.get("business.right_phase_cols", [3, 4])]
+        self._right_phase_cols = [int(col) for col in self.config.get("business.right_phase_cols", [2, 3, 4])]
         self._allow_single_arm = bool(self.config.get("business.allow_single_arm_grasp", True))
         self._max_adjacent_height_delta = int(self.config.get("business.max_adjacent_column_height_delta", 1))
 
@@ -860,25 +861,41 @@ class WallDestackingStrategyNodeMixin:
             self._set_active_substate("PairSelectionFSM", "PAIR_SELECTION_ERROR", {"reason": "no candidate"})
             return None
 
-        safe_by_phase = {}
+        global_plan = self._plan_global_grasp_sequence(column_heights, current_phase)
+        self._set_active_substate(
+            "PairSelectionFSM",
+            "PLAN_GLOBAL_SEQUENCE",
+            {
+                "total_cost": int(global_plan.total_cost),
+                "grasp_count": int(global_plan.grasp_count),
+                "phase_moves": int(global_plan.phase_moves),
+                "expanded_states": int(global_plan.expanded_states),
+                "searched_edges": int(global_plan.searched_edges),
+                "next_action": self._global_action_summary(global_plan.actions[0]) if global_plan.actions else {},
+            },
+        )
+
+        safe_candidates = []
         safety_rejections = []
         for phase, candidates in candidates_by_phase.items():
-            safe_candidate, phase_rejections = self._first_safe_candidate(candidates, column_heights)
-            safe_by_phase[int(phase)] = safe_candidate
-            safety_rejections.extend(phase_rejections)
+            for candidate in candidates:
+                safe, reason = self._candidate_height_safe(candidate, column_heights)
+                if safe:
+                    safe_candidates.append(candidate)
+                else:
+                    safety_rejections.append(reason)
         self._set_active_substate(
             "PairSelectionFSM",
             "CHECK_HEIGHT_SAFETY",
             {
                 "max_adjacent_delta": int(getattr(self, "_max_adjacent_height_delta", self.config.get("business.max_adjacent_column_height_delta", 1))),
-                "left_safe": safe_by_phase[0] is not None,
-                "right_safe": safe_by_phase[1] is not None,
+                "left_safe": any(int(candidate["phase"]) == 0 for candidate in safe_candidates),
+                "right_safe": any(int(candidate["phase"]) == 1 for candidate in safe_candidates),
                 "rejection_reasons": safety_rejections[:6],
             },
         )
 
-        selected_phase = self._select_preferred_phase(current_phase, safe_by_phase)
-        if selected_phase is None:
+        if not safe_candidates:
             self._set_active_substate(
                 "PairSelectionFSM",
                 "PAIR_SELECTION_ERROR",
@@ -892,14 +909,20 @@ class WallDestackingStrategyNodeMixin:
             return None
 
         rejection_reasons = []
-        selected = None
-        for candidate in self._reachable_candidate_order(selected_phase, safe_by_phase, candidates_by_phase, column_heights):
+        scored_candidates = []
+        for candidate in safe_candidates:
             reachable, reason = self._pair_candidate_reachable(candidate)
-            if reachable:
-                selected = candidate
-                selected_phase = int(candidate["phase"])
-                break
-            rejection_reasons.append(reason)
+            if not reachable:
+                rejection_reasons.append(reason)
+                continue
+            score = self._candidate_global_score(candidate, current_phase, column_heights)
+            if score is None:
+                safety_rejections.append(f"{self._candidate_label(candidate)}:no_global_plan")
+                continue
+            scored_candidates.append((score, candidate))
+        scored_candidates.sort(key=lambda item: item[0])
+        selected = scored_candidates[0][1] if scored_candidates else None
+        selected_phase = int(selected["phase"]) if selected is not None else int(current_phase)
         self._set_active_substate(
             "PairSelectionFSM",
             "VALIDATE_REACHABILITY",
@@ -907,6 +930,7 @@ class WallDestackingStrategyNodeMixin:
                 "selected_phase": int(selected_phase),
                 "candidate_count": candidate_count,
                 "reachable": selected is not None,
+                "global_score": list(scored_candidates[0][0][:4]) if scored_candidates else [],
                 "rejection_reasons": rejection_reasons[:4],
             },
         )
@@ -1194,24 +1218,20 @@ class WallDestackingStrategyNodeMixin:
 
         candidates = []
         single_blocked = False
-        phase_slots = [slot for slot in available_slots if int(slot.col_index) in self._phase_cols(phase)]
-        for row in range(self._rows):
-            row_slots = [slot for slot in phase_slots if int(slot.row_index) == row]
-            row_slots.sort(key=lambda slot: int(slot.col_index))
-            if len(row_slots) >= 2:
-                for index in range(len(row_slots) - 1):
-                    pair_slots = row_slots[index : index + 2]
-                    if int(pair_slots[1].col_index) != int(pair_slots[0].col_index) + 1:
-                        continue
-                    left_slot, right_slot = self._assign_candidate_slots_by_y(pair_slots)
-                    candidates.append(
-                        {
-                            "phase": int(phase),
-                            "mode": GraspMode.DUAL,
-                            "left_slot": left_slot,
-                            "right_slot": right_slot,
-                        }
-                    )
+        phase_slots = sorted(
+            [slot for slot in available_slots if int(slot.col_index) in self._phase_cols(phase)],
+            key=lambda slot: int(slot.col_index),
+        )
+        for slot_a, slot_b in combinations(phase_slots, 2):
+            left_slot, right_slot = self._assign_candidate_slots_by_y((slot_a, slot_b))
+            candidates.append(
+                {
+                    "phase": int(phase),
+                    "mode": GraspMode.DUAL,
+                    "left_slot": left_slot,
+                    "right_slot": right_slot,
+                }
+            )
 
         for slot in phase_slots:
             if not self._allow_single_arm:
@@ -1237,11 +1257,11 @@ class WallDestackingStrategyNodeMixin:
         )
         return left_slot, right_slot
 
-    def _candidate_priority_key(self, candidate: dict) -> tuple[int, int, int, int]:
+    def _candidate_priority_key(self, candidate: dict) -> tuple:
         slots = self._candidate_slots(candidate)
         top_row = min(int(slot.row_index) for slot in slots)
-        left_col = min(int(slot.col_index) for slot in slots)
-        return (top_row, left_col, 0 if self._candidate_is_dual(candidate) else 1, int(candidate["phase"]))
+        columns = self._candidate_columns(candidate)
+        return (top_row, columns, 0 if self._candidate_is_dual(candidate) else 1, int(candidate["phase"]))
 
     def _candidate_slots(self, candidate: dict) -> list[object]:
         return [slot for slot in (candidate.get("left_slot"), candidate.get("right_slot")) if slot is not None]
@@ -1254,26 +1274,12 @@ class WallDestackingStrategyNodeMixin:
     def _candidate_columns(self, candidate: dict) -> tuple[int, ...]:
         return tuple(sorted({int(slot.col_index) for slot in self._candidate_slots(candidate)}))
 
-    def _first_safe_candidate(self, candidates: list[dict], column_heights: list[int]) -> tuple[dict | None, list[str]]:
-        rejections = []
-        for candidate in candidates:
-            safe, reason = self._candidate_height_safe(candidate, column_heights)
-            if safe:
-                return candidate, rejections
-            rejections.append(reason)
-        return None, rejections
-
     def _candidate_height_safe(self, candidate: dict, column_heights: list[int]) -> tuple[bool, str]:
         after = self._simulate_candidate_heights(column_heights, candidate)
         if after is None:
             return False, f"{self._candidate_label(candidate)}:invalid_height"
         if not self._heights_safe(after):
             return False, f"{self._candidate_label(candidate)}:{column_heights}->{after}"
-        if self._candidate_is_dual(candidate):
-            for col in self._candidate_columns(candidate):
-                partial_after = self._simulate_columns(column_heights, (col,))
-                if partial_after is None or not self._heights_safe(partial_after):
-                    return False, f"{self._candidate_label(candidate)}:partial_col_{col}:{column_heights}->{partial_after}"
         return True, "height_safe"
 
     def _simulate_candidate_heights(self, column_heights: list[int], candidate: dict) -> list[int] | None:
@@ -1295,34 +1301,56 @@ class WallDestackingStrategyNodeMixin:
         slot_ids = ",".join(slot.slot_id for slot in self._candidate_slots(candidate))
         return f"p{int(candidate.get('phase', -1))}:{slot_ids}"
 
-    def _select_preferred_phase(self, current_phase: int, safe_by_phase: dict[int, dict | None]) -> int | None:
-        if safe_by_phase.get(int(current_phase)) is not None:
-            return int(current_phase)
-        other_phase = 1 - int(current_phase)
-        if safe_by_phase.get(other_phase) is not None:
-            return other_phase
-        return None
+    def _plan_global_grasp_sequence(self, column_heights: list[int], current_phase: int):
+        return plan_global_grasp_sequence(
+            column_heights,
+            current_phase,
+            rows=self._rows,
+            left_phase_cols=self._left_phase_cols,
+            right_phase_cols=self._right_phase_cols,
+            allow_single_arm=self._allow_single_arm,
+            max_adjacent_height_delta=self._max_adjacent_height_delta,
+        )
 
-    def _reachable_candidate_order(
-        self,
-        selected_phase: int,
-        safe_by_phase: dict[int, dict | None],
-        candidates_by_phase: dict[int, list[dict]],
-        column_heights: list[int],
-    ) -> list[dict]:
-        ordered = []
-        phases = [int(selected_phase), 1 - int(selected_phase)]
-        for phase in phases:
-            first_safe = safe_by_phase.get(phase)
-            if first_safe is not None:
-                ordered.append(first_safe)
-                for candidate in candidates_by_phase.get(phase, []):
-                    if candidate is first_safe:
-                        continue
-                    safe, _ = self._candidate_height_safe(candidate, column_heights)
-                    if safe:
-                        ordered.append(candidate)
-        return ordered
+    def _candidate_global_score(self, candidate: dict, current_phase: int, column_heights: list[int]) -> tuple | None:
+        after = self._simulate_candidate_heights(column_heights, candidate)
+        if after is None:
+            return None
+        remaining_plan = self._plan_global_grasp_sequence(after, int(candidate["phase"]))
+        if remaining_plan.total_cost < 0:
+            return None
+        immediate_cost = self._candidate_action_cost(candidate, current_phase, column_heights)
+        total_cost = int(immediate_cost) + int(remaining_plan.total_cost)
+        phase_moves = (1 if int(candidate["phase"]) != int(current_phase) else 0) + int(remaining_plan.phase_moves)
+        grasp_count = 1 + int(remaining_plan.grasp_count)
+        return (
+            total_cost,
+            phase_moves,
+            grasp_count,
+            0 if int(candidate["phase"]) == int(current_phase) else 1,
+            self._candidate_priority_key(candidate),
+        )
+
+    def _candidate_action_cost(self, candidate: dict, current_phase: int, column_heights: list[int]) -> int:
+        if int(candidate["phase"]) != int(current_phase):
+            return 10
+        columns = self._candidate_columns(candidate)
+        if len(columns) == 1:
+            return 5
+        row_a = self._rows - int(column_heights[columns[0]])
+        row_b = self._rows - int(column_heights[columns[1]])
+        if row_a == row_b and abs(int(columns[0]) - int(columns[1])) == 1:
+            return 3
+        return 1
+
+    def _global_action_summary(self, action) -> dict:
+        return {
+            "phase": int(action.phase),
+            "columns": list(action.columns),
+            "cost": int(action.cost),
+            "phase_move": bool(action.phase_move),
+            "same_layer_adjacent": bool(action.same_layer_adjacent),
+        }
 
     def _column_heights(self) -> list[int]:
         from fsm_core.constants import SlotStatus

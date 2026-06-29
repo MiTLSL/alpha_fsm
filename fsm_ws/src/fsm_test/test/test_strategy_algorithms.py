@@ -1,6 +1,12 @@
 import unittest
 
-from wall_destacking_strategy.algorithms import AABB, assign_grid_indices_by_yz, fit_wall_plane_ransac, point_in_aabb
+from wall_destacking_strategy.algorithms import (
+    AABB,
+    assign_grid_indices_by_yz,
+    fit_wall_plane_ransac,
+    plan_global_grasp_sequence,
+    point_in_aabb,
+)
 
 
 class TestStrategyAlgorithms(unittest.TestCase):
@@ -46,3 +52,31 @@ class TestStrategyAlgorithms(unittest.TestCase):
         self.assertTrue(point_in_aabb((0.6, 0.4, 1.0), workspace))
         self.assertFalse(point_in_aabb((0.6, 0.8, 1.0), workspace, margin=0.0))
         self.assertTrue(point_in_aabb((0.6, 0.8, 1.0), workspace, margin=0.4))
+
+    def test_l0_global_plan_prefers_non_adjacent_dual_in_current_phase(self):
+        plan = plan_global_grasp_sequence(
+            [1, 1, 1, 0, 0],
+            current_phase=0,
+            rows=5,
+            left_phase_cols=(0, 1, 2),
+            right_phase_cols=(2, 3, 4),
+        )
+
+        self.assertGreaterEqual(len(plan.actions), 1)
+        self.assertEqual(plan.actions[0].phase, 0)
+        self.assertEqual(plan.actions[0].columns, (0, 2))
+        self.assertEqual(plan.actions[0].cost, 1)
+        self.assertFalse(plan.actions[0].same_layer_adjacent)
+
+    def test_l0_global_plan_right_phase_covers_overlap_column(self):
+        plan = plan_global_grasp_sequence(
+            [0, 0, 1, 1, 0],
+            current_phase=1,
+            rows=5,
+            left_phase_cols=(0, 1, 2),
+            right_phase_cols=(2, 3, 4),
+        )
+
+        self.assertGreaterEqual(len(plan.actions), 1)
+        self.assertEqual(plan.actions[0].phase, 1)
+        self.assertEqual(plan.actions[0].columns, (2, 3))
