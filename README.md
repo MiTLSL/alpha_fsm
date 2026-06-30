@@ -14,6 +14,7 @@
 
 这套工程遵循几个核心原则：
 
+- `统一集成，边界隔离`：整机联调用一个 ROS 2 colcon 集成工作区和统一 launch 编排，但视觉、导航、机械臂、真空等能力按 package / node / 接口契约隔离，不写成一个大节点。
 - `adapter-first`：业务 FSM 不直接耦合 Nav2、MoveIt、感知上游或真空硬件。
 - `mock-first`：先用 mock 跑通主流程，再逐步替换真实后端。
 - `接口先冻结`：`fsm_msgs`、错误码、配置与节点边界优先稳定，减少多人并行开发时的反复返工。
@@ -93,6 +94,8 @@ navigation_manager  perception_adapter  pair_grasp_execution
                                            ↓
                                         vacuum_io
 ```
+
+这意味着 FSM 项目不是完全独立地“各控制各的”，也不是把所有真实算法和驱动塞进状态机包里。状态机只编排任务和恢复路径；Nav2、MoveIt、视觉感知、底盘驱动、真空硬件可以来自独立源码包或上游工作区，但进入本系统时必须经过 `navigation_manager`、`pair_grasp_execution`、`perception_adapter`、`vacuum_io` 这些边界节点。
 
 ## 包职责总览
 
@@ -334,4 +337,3 @@ python3 scripts/m2_pre_grasp_fake_real_smoke.py
 - 配置说明：`docs/05_配置与参数清单.md`
 - 测试分层：`docs/07_Mock规格与测试用例.md`
 - 路线图：`docs/09_任务拆解.md`
-

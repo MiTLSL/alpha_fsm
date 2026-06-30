@@ -17,7 +17,7 @@ class PairGraspExecutionNodeMixin(GraspTargetBuilderMixin, MoveItGoalBuilderMixi
     def init_grasp_backend(self):
         from fsm_core.ros2_helpers import get_action_name, get_service_name
         from moveit_msgs.action import MoveGroup
-        from moveit_msgs.srv import ApplyPlanningScene
+        from moveit_msgs.srv import ApplyPlanningScene, GetStateValidity
         from rclpy.action import ActionClient
         from rclpy.callback_groups import ReentrantCallbackGroup
 
@@ -48,6 +48,27 @@ class PairGraspExecutionNodeMixin(GraspTargetBuilderMixin, MoveItGoalBuilderMixi
         self._attach_box_to_planning_scene = bool(
             self.config.get("business.pair_grasp_execution.attach_box_to_planning_scene", True)
         )
+        self._manage_world_collision_objects = bool(
+            self.config.get("business.pair_grasp_execution.collision_scene.manage_world_objects", True)
+        )
+        self._remove_target_box_world_objects = bool(
+            self.config.get("business.pair_grasp_execution.collision_scene.remove_target_box_objects", False)
+        )
+        self._self_collision_check_current_state = bool(
+            self.config.get("business.pair_grasp_execution.self_collision.check_current_state", True)
+        )
+        self._self_collision_require_dual_arm_group = bool(
+            self.config.get("business.pair_grasp_execution.self_collision.require_dual_arm_group", True)
+        )
+        self._self_collision_required_group_name = str(
+            self.config.get("business.pair_grasp_execution.self_collision.required_group_name", "dual_v5_arm_with_base")
+        )
+        self._joint_state_max_age_sec = float(
+            self.config.get("business.pair_grasp_execution.self_collision.joint_state_max_age_sec", 1.0)
+        )
+        self._state_validity_timeout_sec = float(
+            self.config.get("business.pair_grasp_execution.self_collision.state_validity_timeout_sec", 1.0)
+        )
         self._attached_box_weight_kg = float(self.config.get("business.pair_grasp_execution.attached_box_weight_kg", 2.0))
         self._attached_box_touch_links = list(self.config.get("business.pair_grasp_execution.attached_box_touch_links", []))
         self._planning_frame = str(self.config.get("interfaces.frames.base_link", "base_link"))
@@ -57,14 +78,23 @@ class PairGraspExecutionNodeMixin(GraspTargetBuilderMixin, MoveItGoalBuilderMixi
         self._attach_threshold_kpa = float(self.config.get("business.vacuum.attach_threshold_kpa", -50.0))
         self._moveit_action_name = get_action_name(self, "moveit_move_group", "/move_action")
         self._apply_planning_scene_service = get_service_name(self, "moveit_apply_planning_scene", "/apply_planning_scene")
+        self._check_state_validity_service = get_service_name(self, "moveit_check_state_validity", "/check_state_validity")
         self._moveit_client = ActionClient(self, MoveGroup, self._moveit_action_name, callback_group=self._io_callback_group)
         self._planning_scene_client = self.create_client(
             ApplyPlanningScene,
             self._apply_planning_scene_service,
             callback_group=self._io_callback_group,
         )
+        self._state_validity_client = self.create_client(
+            GetStateValidity,
+            self._check_state_validity_service,
+            callback_group=self._io_callback_group,
+        )
         self._active_moveit_goal_handle = None
         self._attached_object_ids = set()
+        self._world_collision_object_ids = set()
+        self._last_joint_state = None
+        self._last_joint_state_received_monotonic = None
 
     def handle_goal(self, goal_request):
         from rclpy.action import GoalResponse
@@ -99,6 +129,10 @@ class PairGraspExecutionNodeMixin(GraspTargetBuilderMixin, MoveItGoalBuilderMixi
     def on_pressure_raw(self, msg):
         if len(msg.data) >= 2:
             self._last_pressure_raw = [float(msg.data[0]), float(msg.data[1])]
+
+    def on_joint_states(self, msg):
+        self._last_joint_state = msg
+        self._last_joint_state_received_monotonic = time.monotonic()
 
     def publish_pressure_forward(self):
         from std_msgs.msg import Float32MultiArray
@@ -140,6 +174,7 @@ class PairGraspExecutionNodeMixin(GraspTargetBuilderMixin, MoveItGoalBuilderMixi
                     if self._release_on_cancel:
                         self._publish_vacuum_command(False, False)
                     await self._clear_attached_boxes_best_effort()
+                    await self._cleanup_pair_planning_scene(pair)
                     goal_handle.canceled()
                     return self._make_result(
                         goal_handle,
@@ -153,6 +188,7 @@ class PairGraspExecutionNodeMixin(GraspTargetBuilderMixin, MoveItGoalBuilderMixi
                     if not self._hold_on_estop:
                         self._publish_vacuum_command(False, False)
                         await self._clear_attached_boxes_best_effort()
+                    await self._cleanup_pair_planning_scene(pair)
                     goal_handle.abort()
                     return self._make_result(
                         goal_handle,
@@ -169,6 +205,7 @@ class PairGraspExecutionNodeMixin(GraspTargetBuilderMixin, MoveItGoalBuilderMixi
             if self._release_on_cancel:
                 self._publish_vacuum_command(False, False)
             await self._clear_attached_boxes_best_effort()
+            await self._cleanup_pair_planning_scene(pair)
             goal_handle.canceled()
             return self._make_result(
                 goal_handle,
@@ -183,6 +220,7 @@ class PairGraspExecutionNodeMixin(GraspTargetBuilderMixin, MoveItGoalBuilderMixi
                 self._publish_vacuum_command(False, False)
             if not self._hold_on_estop or exc.failed_stage != "ESTOP":
                 await self._clear_attached_boxes_best_effort()
+            await self._cleanup_pair_planning_scene(pair)
             goal_handle.abort()
             return self._make_result(
                 goal_handle,
@@ -195,6 +233,7 @@ class PairGraspExecutionNodeMixin(GraspTargetBuilderMixin, MoveItGoalBuilderMixi
 
         if vacuum_enabled:
             self._publish_vacuum_command(False, False)
+        await self._cleanup_pair_planning_scene(pair)
         goal_handle.succeed()
         self._ready_state = "REPORT"
         self.publish_state_heartbeat()
@@ -250,6 +289,13 @@ class PairGraspExecutionNodeMixin(GraspTargetBuilderMixin, MoveItGoalBuilderMixi
         if not targets:
             return False, int(ErrorCode.E_PLAN_PREGRASP_INVALID), f"no MoveIt target for stage {state}"
 
+        ok, error_code, reason = await self._prepare_planning_scene_for_stage(goal_handle.request.grasp_pair, state)
+        if not ok:
+            return False, int(error_code), reason
+        ok, error_code, reason = await self._check_robot_state_valid_for_planning()
+        if not ok:
+            return False, int(error_code), reason
+
         move_goal = MoveGroup.Goal()
         self._fill_motion_plan_request(move_goal.request, targets)
         move_goal.request.group_name = self._moveit_group
@@ -283,20 +329,29 @@ class PairGraspExecutionNodeMixin(GraspTargetBuilderMixin, MoveItGoalBuilderMixi
         from fsm_core.error_code import ErrorCode
         from moveit_msgs.msg import MoveItErrorCodes
 
-        if executing and int(moveit_error) == int(MoveItErrorCodes.CONTROL_FAILED):
+        if executing and int(moveit_error) in self._moveit_error_values(MoveItErrorCodes, "CONTROL_FAILED"):
             return int(ErrorCode.E_MOT_EXEC_FAIL)
-        if int(moveit_error) == int(MoveItErrorCodes.NO_IK_SOLUTION):
+        if int(moveit_error) in self._moveit_error_values(MoveItErrorCodes, "NO_IK_SOLUTION"):
             return int(ErrorCode.E_PLAN_IK_FAIL)
-        collision_errors = {
-            MoveItErrorCodes.START_STATE_IN_COLLISION,
-            MoveItErrorCodes.GOAL_IN_COLLISION,
-            MoveItErrorCodes.COLLISION_CHECKING_UNAVAILABLE,
-        }
-        if int(moveit_error) in {int(value) for value in collision_errors}:
+        if int(moveit_error) in self._moveit_error_values(
+            MoveItErrorCodes,
+            "START_STATE_IN_COLLISION",
+            "GOAL_IN_COLLISION",
+            "COLLISION_CHECKING_UNAVAILABLE",
+            "MOTION_PLAN_INVALIDATED_BY_ENVIRONMENT_CHANGE",
+        ):
             return int(ErrorCode.E_PLAN_COLLISION_DETECTED)
         if executing:
             return int(ErrorCode.E_MOT_EXEC_FAIL)
         return int(ErrorCode.E_PLAN_TRAJ_FAIL)
+
+    @staticmethod
+    def _moveit_error_values(error_codes, *names: str) -> set[int]:
+        values = set()
+        for name in names:
+            if hasattr(error_codes, name):
+                values.add(int(getattr(error_codes, name)))
+        return values
 
     async def _wait_moveit_result(self, goal_handle, future, timeout_sec: float):
         from fsm_core.error_code import ErrorCode

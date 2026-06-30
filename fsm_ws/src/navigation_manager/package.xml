@@ -6,6 +6,7 @@
   <maintainer email="dev@sevnova.local">sevnova_fsm</maintainer>
   <license>Proprietary</license>
   <buildtool_depend>ament_python</buildtool_depend>
+  <exec_depend>action_msgs</exec_depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>fsm_core</exec_depend>
   <exec_depend>fsm_msgs</exec_depend>

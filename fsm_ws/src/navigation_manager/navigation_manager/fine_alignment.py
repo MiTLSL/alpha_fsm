@@ -3,7 +3,8 @@ from __future__ import annotations
 import math
 import time
 
-from .geometry import angle_delta, clamp, yaw_from_pose
+from .geometry import angle_delta, yaw_from_pose
+from .nav_logic import alignment_velocity
 
 
 class FineAlignmentMixin:
@@ -26,6 +27,15 @@ class FineAlignmentMixin:
             if goal_handle.is_cancel_requested:
                 self._publish_zero_align_velocity()
                 return False, int(ErrorCode.E_NAV_GOAL_CANCELLED), "cancelled during fine alignment", final_alignment_error
+            if getattr(self, "_estop", False):
+                self._publish_zero_align_velocity()
+                return False, int(ErrorCode.E_SAFETY_ESTOP_HW), "estop during fine alignment", final_alignment_error
+            if not self._localization_ok():
+                self._publish_zero_align_velocity()
+                return False, int(ErrorCode.E_NAV_LOCALIZATION_LOST), "localization lost during fine alignment", final_alignment_error
+            if not self._chassis_ok():
+                self._publish_zero_align_velocity()
+                return False, int(ErrorCode.E_NAV_STUCK), "chassis fault during fine alignment", final_alignment_error
 
             measurement = self._alignment_measurement(request)
             if measurement is None:
@@ -87,11 +97,24 @@ class FineAlignmentMixin:
         from geometry_msgs.msg import Twist
 
         msg = Twist()
-        msg.linear.x = clamp(self._fine_align_linear_gain * dist_error, -self._fine_align_max_linear_x, self._fine_align_max_linear_x)
-        msg.angular.z = clamp(self._fine_align_angular_gain * yaw_error, -self._fine_align_max_angular_z, self._fine_align_max_angular_z)
+        linear, angular = alignment_velocity(
+            dist_error,
+            yaw_error,
+            linear_gain=self._fine_align_linear_gain,
+            angular_gain=self._fine_align_angular_gain,
+            max_linear_x=self._fine_align_max_linear_x,
+            max_angular_z=self._fine_align_max_angular_z,
+            min_linear_x=self._fine_align_min_linear_x,
+            min_angular_z=self._fine_align_min_angular_z,
+            dist_deadband=self._fine_align_dist_tolerance * 0.5,
+            yaw_deadband=self._fine_align_yaw_tolerance * 0.5,
+        )
+        msg.linear.x = linear
+        msg.angular.z = angular
         self._cmd_vel_align_pub.publish(msg)
 
     def _publish_zero_align_velocity(self) -> None:
         from geometry_msgs.msg import Twist
 
-        self._cmd_vel_align_pub.publish(Twist())
+        for _ in range(max(int(getattr(self, "_fine_align_stop_repeats", 1)), 1)):
+            self._cmd_vel_align_pub.publish(Twist())

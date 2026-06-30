@@ -16,6 +16,7 @@ def main(args=None):
     from fsm_core.ros2_helpers import get_action_name, get_topic_name
     from fsm_msgs.action import ExecutePairGrasp
     from fsm_msgs.msg import VacuumCommand
+    from sensor_msgs.msg import JointState
     from std_msgs.msg import Bool, Float32MultiArray
 
     class PairGraspExecutionNode(SkeletonNodeMixin, PairGraspExecutionNodeMixin, Node):
@@ -42,6 +43,13 @@ def main(args=None):
                 Float32MultiArray,
                 get_topic_name(self, "vacuum_pressure_raw", "/vacuum/pressure_raw"),
                 self.on_pressure_raw,
+                10,
+                callback_group=self._io_callback_group,
+            )
+            self._joint_states_sub = self.create_subscription(
+                JointState,
+                get_topic_name(self, "joint_states", "/joint_states"),
+                self.on_joint_states,
                 10,
                 callback_group=self._io_callback_group,
             )

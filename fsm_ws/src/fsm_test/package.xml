@@ -6,12 +6,15 @@
   <maintainer email="dev@sevnova.local">sevnova_fsm</maintainer>
   <license>Proprietary</license>
   <buildtool_depend>ament_python</buildtool_depend>
+  <exec_depend>action_msgs</exec_depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>box_perception_msgs</exec_depend>
   <exec_depend>fsm_core</exec_depend>
   <exec_depend>fsm_msgs</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>nav2_msgs</exec_depend>
+  <exec_depend>navigation_manager</exec_depend>
+  <exec_depend>pair_grasp_execution</exec_depend>
   <exec_depend>task_manager</exec_depend>
   <exec_depend>wall_destacking_strategy</exec_depend>
   <exec_depend>std_msgs</exec_depend>

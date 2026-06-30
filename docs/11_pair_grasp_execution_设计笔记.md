@@ -34,6 +34,7 @@
 - `backend_mode=dry_run`：只跑状态主线和接口反馈，不调用真实控制器。
 - `backend_mode=fake_real`：使用内部 fake MoveIt 后端注入 `IK_FAIL`、`TRAJ_FAIL`、`COLLISION`、`MOVE_FAIL`、`VACUUM_NOT_REACHED`。
 - `backend_mode=real`：已接 `moveit_msgs/action/MoveGroup` client，action 名默认 `interfaces.actions.moveit_move_group=/move_action`；当前是 MoveIt 接入骨架，真实约束构造和控制器执行仍需要 L3-SIM-03 轻量物理仿真 / 真机 dry-run 验证。
+- 已从旧工程 `/root/blue-sword/FSM_develop/old_codes/v5_dev` 抽取机械臂规划与避碰思路：阶段目标按预抓 / 接触 / 抽离 / 搬运 / 退让生成，MoveIt 规划前通过 `/apply_planning_scene` 注入容器板、静态箱墙开口和 carried box，抓取后把箱体作为 attached collision object 参与后续规划。
 - cancel / estop 已在主线内处理；cancel 返回 `CANCELLED`，estop 返回 `ESTOP` 并按 `hold_on_estop` 决定真空保持策略。
 - 当前仍不实现真实吸盘硬件后端，只保留 `/vacuum/cmd` 和 `/vacuum/pressure` 转发。
 
@@ -99,6 +100,19 @@ REPORT
    - IK 失败映射 `E_PLAN_IK_FAIL=5200`。
    - 轨迹失败映射 `E_PLAN_TRAJ_FAIL=5201`。
    - 碰撞失败映射 `E_PLAN_COLLISION_DETECTED=5210`。
+   - 旧工程的 `dual_arm_planner_node ~/run_box_stack_flow` / `~/plan_and_execute` 不作为 FSM 入口复用；只抽取其中 `MotionSceneAdapter`、箱墙开口、carried box、阶段目标和错误映射思路，落到当前 `/execute_pair_grasp` Action 后端。
+
+2.1 MoveIt 避碰场景。
+   - 避碰分两层：本体避碰优先，环境避碰补充。本体避碰包括左臂-右臂、机械臂-底盘/立柱/机身、机械臂-已 attached 箱体；环境避碰包括容器壁、箱墙静态障碍和外部 world collision objects。
+   - 本体避碰不由 FSM 手写几何规则，而由 MoveIt 的 URDF/SRDF 碰撞模型和 Allowed Collision Matrix 统一负责。当前 `dual_v5_arm_with_base` planning group 覆盖 `updown`、左臂和右臂；SRDF 中左臂-右臂、机械臂-本体碰撞必须保持启用，只允许相邻 link 等确定无效碰撞对进入 `disable_collisions`。
+   - real 后端在发 `MoveGroup` goal 前订阅 `/joint_states` 并调用 `/check_state_validity` 检查当前整机 RobotState；如果已经自碰或机械臂与本体碰撞，直接映射 `E_PLAN_COLLISION_DETECTED`，不继续规划。
+   - `MoveGroup` 的路径采样、目标状态和轨迹段碰撞检查仍由 MoveIt 完成；adapter 不修改 `allowed_collision_matrix`，避免为了通过单次任务误放宽本体安全边界。
+   - `collision_scene.manage_world_objects=true` 时，real 后端在每个规划阶段前同步 planning scene。
+   - `enable_container_obstacle=true` 时，按旧工程 `container_left_wall / container_right_wall / container_ceiling` 语义加入三块容器板。
+   - `enable_static_box_wall_obstacles=true` 时，按当前 `GraspPair` 的左右 slot pose 构造静态箱墙障碍，并在目标箱位置留出开口。
+   - `remove_target_box_objects=true` 时，接触、抽离和搬运阶段会移除目标箱的 world collision object，避免与即将抓取的箱体自碰；默认关闭，只有当仿真或真实场景已用同名 box object 管理目标箱时再打开。
+   - `ATTACH_BOX_MODEL` 后把被抓箱体挂到 `left_tip_link / right_tip_link`，并把 `touch_links` 扩展到末端及相邻末端 link，后续 `PLAN_EXTRACT / PLAN_CARRY / RETREAT_SAFE` 都带 carried box 避碰。
+   - 任务成功、取消、急停或失败时清理本次 pair 的临时 world collision objects 和 attached boxes，避免污染下一次规划。
 
 3. 运动执行。
    - pregrasp、approach、extract、carry、retreat 分阶段执行。

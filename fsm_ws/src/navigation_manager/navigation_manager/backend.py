@@ -6,11 +6,13 @@ import time
 
 from .fine_alignment import FineAlignmentMixin
 from .geometry import angle_delta, duration_to_sec, make_pose_stamped, yaw_from_pose
+from .nav_logic import ChassisStatus, map_nav2_status_to_error, parse_chassis_diagnostics
 
 
 class NavigationManagerNodeMixin(FineAlignmentMixin):
     def init_navigation_backend(self):
         from fsm_core.ros2_helpers import get_action_name, get_service_name, get_topic_name
+        from diagnostic_msgs.msg import DiagnosticArray
         from fsm_msgs.msg import BoxDetectionArray
         from geometry_msgs.msg import PoseWithCovarianceStamped, Twist
         from nav2_msgs.action import NavigateToPose as Nav2NavigateToPose
@@ -27,8 +29,11 @@ class NavigationManagerNodeMixin(FineAlignmentMixin):
         self._nav2_wait_sec = float(self.config.get("business.navigation_manager.nav2_client_wait_sec", 2.0))
         self._require_lifecycle_active = bool(self.config.get("business.navigation_manager.require_lifecycle_active", True))
         self._require_amcl_pose = bool(self.config.get("business.navigation_manager.require_amcl_pose", True))
+        self._require_chassis_ready = bool(self.config.get("business.navigation_manager.require_chassis_ready", False))
         self._amcl_timeout_sec = float(self.config.get("business.navigation_manager.amcl_timeout_sec", 1.5))
         self._amcl_max_covariance = float(self.config.get("business.navigation_manager.amcl_max_covariance", 0.25))
+        self._chassis_status_timeout_sec = float(self.config.get("business.navigation_manager.chassis_status_timeout_sec", 1.0))
+        self._estop_release_repeats = int(self.config.get("business.navigation_manager.estop_release_repeats", 3))
         self._fine_align_feedback_timeout_sec = float(self.config.get("business.fine_alignment.feedback_timeout_ms", 1000.0)) / 1000.0
         self._fine_align_timeout_sec = float(self.config.get("business.fine_alignment.timeout_sec", 15.0))
         self._fine_align_pass_frames = int(self.config.get("business.fine_alignment.pass_frames", 5))
@@ -36,14 +41,19 @@ class NavigationManagerNodeMixin(FineAlignmentMixin):
         self._fine_align_yaw_tolerance = float(self.config.get("business.fine_alignment.yaw_tolerance", 0.05))
         self._fine_align_max_linear_x = float(self.config.get("business.fine_alignment.max_linear_x", 0.05))
         self._fine_align_max_angular_z = float(self.config.get("business.fine_alignment.max_angular_z", 0.20))
+        self._fine_align_min_linear_x = float(self.config.get("business.fine_alignment.min_linear_x", 0.0))
+        self._fine_align_min_angular_z = float(self.config.get("business.fine_alignment.min_angular_z", 0.0))
         self._fine_align_linear_gain = float(self.config.get("business.fine_alignment.linear_gain", 0.8))
         self._fine_align_angular_gain = float(self.config.get("business.fine_alignment.angular_gain", 1.5))
         self._fine_align_min_detection_confidence = float(self.config.get("business.fine_alignment.min_detection_confidence", 0.5))
+        self._fine_align_stop_repeats = int(self.config.get("business.fine_alignment.stop_cmd_repeats", 2))
         self._map_frame = str(self.config.get("interfaces.frames.map", "map"))
 
         self._last_amcl_pose = None
         self._last_amcl_monotonic = 0.0
         self._last_amcl_covariance = float("inf")
+        self._last_chassis_status = ChassisStatus()
+        self._last_chassis_monotonic = 0.0
         self._last_nav2_feedback_pose = None
         self._last_nav2_distance_remaining = 0.0
         self._last_nav2_eta_sec = 0.0
@@ -51,6 +61,7 @@ class NavigationManagerNodeMixin(FineAlignmentMixin):
         self._last_detection_monotonic = 0.0
         self._last_lifecycle_ok = False
         self._active_nav2_goal_handle = None
+        self._estop = False
 
         self._nav2_action_client = ActionClient(self, Nav2NavigateToPose, self._nav2_action_name, callback_group=self._io_callback_group)
         self._lifecycle_navigation_client = self.create_client(
@@ -85,10 +96,24 @@ class NavigationManagerNodeMixin(FineAlignmentMixin):
         )
         self._estop_pub = self.create_publisher(Bool, get_topic_name(self, "estop", "/estop"), 10)
         self._cmd_vel_align_pub = self.create_publisher(Twist, get_topic_name(self, "cmd_vel_align", "/cmd_vel_align"), 10)
+        self._safety_estop_sub = self.create_subscription(
+            Bool,
+            get_topic_name(self, "safety_estop", "/safety/estop"),
+            self.on_estop,
+            10,
+            callback_group=self._io_callback_group,
+        )
         self._amcl_sub = self.create_subscription(
             PoseWithCovarianceStamped,
             get_topic_name(self, "amcl_pose", "/amcl_pose"),
             self.on_amcl_pose,
+            10,
+            callback_group=self._io_callback_group,
+        )
+        self._chassis_status_sub = self.create_subscription(
+            DiagnosticArray,
+            get_topic_name(self, "chassis_status", "/chassis_node/status"),
+            self.on_chassis_status,
             10,
             callback_group=self._io_callback_group,
         )
@@ -131,11 +156,28 @@ class NavigationManagerNodeMixin(FineAlignmentMixin):
         values = [abs(float(covariance[index])) for index in diagonal_indices if index < len(covariance)]
         self._last_amcl_covariance = max(values) if values else float("inf")
 
+    def on_chassis_status(self, msg):
+        self._last_chassis_status = parse_chassis_diagnostics(msg.status)
+        self._last_chassis_monotonic = time.monotonic()
+
+    def on_estop(self, msg):
+        self._estop = bool(msg.data)
+        if self._estop:
+            self._ready_state = "ESTOP"
+            self.publish_state_heartbeat()
+            nav2_goal = getattr(self, "_active_nav2_goal_handle", None)
+            if nav2_goal is not None:
+                try:
+                    nav2_goal.cancel_goal_async()
+                except Exception as exc:  # pragma: no cover - defensive DDS boundary
+                    self.get_logger().warning(f"failed to cancel Nav2 goal on estop: {exc}")
+            self._publish_zero_align_velocity()
+
     def publish_nav_health(self):
         from std_msgs.msg import Bool
 
         msg = Bool()
-        msg.data = bool(self._last_lifecycle_ok and self._localization_ok())
+        msg.data = bool(self._last_lifecycle_ok and self._localization_ok() and self._chassis_ok())
         self._nav_health_pub.publish(msg)
 
     async def execute_navigation_goal(self, goal_handle):
@@ -157,6 +199,15 @@ class NavigationManagerNodeMixin(FineAlignmentMixin):
         self.publish_state_heartbeat()
         self._publish_feedback(goal_handle, "RECEIVE_GOAL", distance=0.0, eta=0.0)
 
+        if self._estop:
+            goal_handle.abort()
+            return self._make_failure_result(
+                result,
+                target_pose,
+                int(ErrorCode.E_SAFETY_ESTOP_HW),
+                "safety estop is active",
+            )
+
         lifecycle_ok = await self._check_lifecycle_active()
         self._last_lifecycle_ok = lifecycle_ok
         if not lifecycle_ok:
@@ -176,6 +227,15 @@ class NavigationManagerNodeMixin(FineAlignmentMixin):
                 target_pose,
                 int(ErrorCode.E_NAV_LOCALIZATION_LOST),
                 "AMCL pose missing, stale, or covariance too high",
+            )
+
+        if not self._chassis_ok():
+            goal_handle.abort()
+            return self._make_failure_result(
+                result,
+                target_pose,
+                int(ErrorCode.E_NAV_STUCK),
+                "chassis status missing, stale, disabled, or faulted",
             )
 
         if not self._nav2_action_client.wait_for_server(timeout_sec=max(self._nav2_wait_sec, 0.1)):
@@ -207,11 +267,31 @@ class NavigationManagerNodeMixin(FineAlignmentMixin):
             if goal_handle.is_cancel_requested:
                 await self._cancel_active_nav2_goal()
                 self._active_nav2_goal_handle = None
+                self._publish_zero_align_velocity()
                 goal_handle.canceled()
                 return self._make_failure_result(result, target_pose, int(ErrorCode.E_NAV_GOAL_CANCELLED), "cancelled")
+            if self._estop:
+                await self._cancel_active_nav2_goal()
+                self._active_nav2_goal_handle = None
+                self._publish_zero_align_velocity()
+                goal_handle.abort()
+                return self._make_failure_result(result, target_pose, int(ErrorCode.E_SAFETY_ESTOP_HW), "estop during navigation")
+            if not self._localization_ok():
+                await self._cancel_active_nav2_goal()
+                self._active_nav2_goal_handle = None
+                self._publish_zero_align_velocity()
+                goal_handle.abort()
+                return self._make_failure_result(result, target_pose, int(ErrorCode.E_NAV_LOCALIZATION_LOST), "localization lost during navigation")
+            if not self._chassis_ok():
+                await self._cancel_active_nav2_goal()
+                self._active_nav2_goal_handle = None
+                self._publish_zero_align_velocity()
+                goal_handle.abort()
+                return self._make_failure_result(result, target_pose, int(ErrorCode.E_NAV_STUCK), "chassis fault during navigation")
             if time.monotonic() >= deadline:
                 await self._cancel_active_nav2_goal()
                 self._active_nav2_goal_handle = None
+                self._publish_zero_align_velocity()
                 goal_handle.abort()
                 return self._make_failure_result(result, target_pose, int(ErrorCode.E_NAV_GOAL_TIMEOUT), "Nav2 goal timeout")
             await self._sleep(0.05)
@@ -220,9 +300,7 @@ class NavigationManagerNodeMixin(FineAlignmentMixin):
         nav2_result = result_future.result()
         if int(nav2_result.status) != int(GoalStatus.STATUS_SUCCEEDED):
             goal_handle.abort()
-            error = ErrorCode.E_NAV_PATH_PLAN_FAIL
-            if int(nav2_result.status) == int(GoalStatus.STATUS_CANCELED):
-                error = ErrorCode.E_NAV_GOAL_CANCELLED
+            error = map_nav2_status_to_error(int(nav2_result.status), GoalStatus, ErrorCode)
             return self._make_failure_result(result, target_pose, int(error), f"Nav2 returned status {int(nav2_result.status)}")
 
         actual_pose = self._last_nav2_feedback_pose or target_pose
@@ -313,6 +391,16 @@ class NavigationManagerNodeMixin(FineAlignmentMixin):
             return False
         return bool(self._last_amcl_covariance <= self._amcl_max_covariance)
 
+    def _chassis_ok(self) -> bool:
+        if not self._require_chassis_ready:
+            return True
+        if self._last_chassis_monotonic <= 0.0:
+            return False
+        if time.monotonic() - self._last_chassis_monotonic > self._chassis_status_timeout_sec:
+            return False
+        status = self._last_chassis_status
+        return bool(status.enabled and status.heartbeat_ok and not status.fault and not status.stale)
+
     def _goal_timeout_sec(self, requested_timeout: float) -> float:
         if requested_timeout and float(requested_timeout) > 0.0:
             return float(requested_timeout)
@@ -372,7 +460,8 @@ class NavigationManagerNodeMixin(FineAlignmentMixin):
         if request.command == request.RELEASE_ESTOP:
             msg = Bool()
             msg.data = False
-            self._estop_pub.publish(msg)
+            for _ in range(max(self._estop_release_repeats, 1)):
+                self._estop_pub.publish(msg)
             response.success = True
             response.error_code = 0
             response.message = "estop release command published"

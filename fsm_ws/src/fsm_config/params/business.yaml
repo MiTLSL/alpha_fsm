@@ -109,8 +109,11 @@
         service_timeout_sec: 2.0
         require_lifecycle_active: true
         require_amcl_pose: true
+        require_chassis_ready: false
         amcl_timeout_sec: 1.5
         amcl_max_covariance: 0.25
+        chassis_status_timeout_sec: 1.0
+        estop_release_repeats: 3
         fine_align_stub_success: true
 
       fine_alignment:
@@ -121,10 +124,13 @@
         yaw_tolerance: 0.05
         max_linear_x: 0.05
         max_angular_z: 0.20
+        min_linear_x: 0.0
+        min_angular_z: 0.0
         linear_gain: 0.80
         angular_gain: 1.50
         min_detection_confidence: 0.50
         feedback_timeout_ms: 1000
+        stop_cmd_repeats: 2
 
       vacuum:
         attach_threshold_kpa: -50.0
@@ -160,6 +166,27 @@
         attach_box_to_planning_scene: true
         attached_box_weight_kg: 2.0
         attached_box_touch_links: []
+        self_collision:
+          check_current_state: true
+          require_dual_arm_group: true
+          required_group_name: "dual_v5_arm_with_base"
+          joint_state_max_age_sec: 1.0
+          state_validity_timeout_sec: 1.0
+        collision_scene:
+          manage_world_objects: true
+          remove_target_box_objects: false
+          enable_container_obstacle: false
+          enable_static_box_wall_obstacles: false
+          static_box_obstacle_inset: 0.002
+          static_box_wall_margin: 0.0
+          container:
+            center_x: 0.0
+            center_y: 0.0
+            width: 2.2
+            height: 2.4
+            length: 8.0
+            wall_thickness: 0.03
+            floor_z: 0.0
         planning_workspace:
           x_min: -1.0
           x_max: 1.5

@@ -17,6 +17,7 @@ WS = ROOT / "fsm_ws"
 def _ensure_ros_python() -> None:
     try:
         import rclpy  # noqa: F401
+        import fsm_core  # noqa: F401
     except ImportError:
         env = os.environ.copy()
         env["ROS_LOG_DIR"] = "/tmp/sevnova_fsm_ros_log"

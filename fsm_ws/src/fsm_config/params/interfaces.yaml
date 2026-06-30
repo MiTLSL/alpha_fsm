@@ -27,6 +27,7 @@
         vacuum_pressure: "/vacuum/pressure"
         vacuum_health: "/vacuum/health"
         io_state: "/io/state"
+        joint_states: "/joint_states"
         cmd_vel_align: "/cmd_vel_align"
         estop: "/estop"
         amcl_pose: "/amcl_pose"
@@ -50,6 +51,7 @@
         chassis_reset_fault: "/chassis_node/reset_fault"
         chassis_enable: "/chassis_node/enable"
         moveit_apply_planning_scene: "/apply_planning_scene"
+        moveit_check_state_validity: "/check_state_validity"
 
       actions:
         run_wall_destacking: "/run_wall_destacking"

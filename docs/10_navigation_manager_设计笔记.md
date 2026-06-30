@@ -29,10 +29,12 @@
 - `/navigate_to_pose` 会转发到内部 Nav2 `NavigateToPose` Action，内部 action 名默认 `interfaces.actions.nav2_navigate_to_pose=/nav2/navigate_to_pose`，避免和 FSM 对外 `/navigate_to_pose` 冲突。
 - 已接 `/lifecycle_manager_navigation/is_active`、`/lifecycle_manager_localization/is_active`，失败映射 `E_NAV_LIFECYCLE_NOT_ACTIVE=4050`。
 - 已订 `/amcl_pose`，按 `business.navigation_manager.amcl_max_covariance` 和 `amcl_timeout_sec` 判断定位健康，失败映射 `E_NAV_LOCALIZATION_LOST=4010`。
+- 已订 `/chassis_node/status`，可按 `business.navigation_manager.require_chassis_ready` 启用底盘 enabled / fault / heartbeat 检查；运行中底盘故障会 cancel Nav2 并映射 `E_NAV_STUCK=4022`。
 - 已封装 local/global costmap clear client。
 - `/nav/base_recovery` 已调用 `/estop=False`、`/chassis_node/reset_fault`、`/chassis_node/enable`，并映射 4060/4061。
-- 已支持上层 cancel 透传到 Nav2 goal。
-- `require_fine_alignment=true` 时当前只提供最小 stub：发布一次零 `/cmd_vel_align` 并回报收敛；完整视觉/激光闭环仍属于后续 M2-SIM / 真机验证项。
+- 已支持上层 cancel / `/safety/estop` 透传到 Nav2 goal，并显式发布零 `/cmd_vel_align`。
+- `require_fine_alignment=true` 时使用 `/perception/box_detections` 做视觉闭环，按距离误差和 yaw 误差发布 `/cmd_vel_align`；控制律吸收了旧 `alfa_nav_control/path_follower_node` 的限速、最小速度、死区和停发零速度思路，但不直接发 `/cmd_vel`。
+- 已从 `old_codes/robot_navigation` 抽取边界策略：Fast-LIO / Nav2 / 2D 投影 / 地图发布作为外部导航 workspace 或 overlay 运行，当前仓库只维护 `navigation_manager_node` 适配层；旧 `path_follower_node` 和 `goal_resolver` 不作为 FSM 入口复用。
 
 离线验收：
 
@@ -92,6 +94,7 @@ M2 中应由以下信号合成：
    - 发布 `/cmd_vel_align`。
    - 订阅视觉或激光对墙误差反馈。
    - 收敛失败映射到 `E_NAV_FINE_ALIGN_FAIL=4040`。
+   - V1 已选定视觉反馈源：`/perception/box_detections` 中有效箱体 pose 的距离和 yaw 均值；激光最近点作为 V2。
 
 3. 接底盘恢复。
    - `/clear_error` 第 1/3/4 阶段实际动作在本节点执行。
@@ -131,7 +134,18 @@ M2-SIM 用来在真机 Nav2 / chassis 未稳定前，先验证 navigation_manage
 
 ## 5. 风险
 
-- FINE_ALIGN 反馈源尚未冻结：可能来自 perception_adapter 的墙面法向，也可能来自激光最近点。
+- FINE_ALIGN 反馈源 V1 已冻结为 perception_adapter 的箱体/墙面检测；风险在于真实视觉延迟、漏检和箱面 yaw 噪声，需 L3-M2-NAV 验证。
 - M2-SIM 能提前验证 FINE_ALIGN 控制律，但无法覆盖真实视觉漏检、延迟和噪声；L3-M2-NAV 仍是 M2 完成判据。
 - `/clear_error` 第 1 阶段需要和 twist_mux 实际锁语义对齐，不能只发 `/estop=False` 就认为成功。
 - 真机 Nav2 的 action result 与当前 mock 阶段序列不一定一致，M2 需要补状态映射表。
+
+## 6. 从 old_codes/robot_navigation 抽取的取舍
+
+| 旧模块 | 当前处理 | 原因 |
+|---|---|---|
+| `fastlio` / `FAST_LIO_LOCALIZATION2` | 外部 overlay 启动 | 属于定位/建图栈，不进入 FSM 业务包 |
+| `alfa_nav_mapping/body_2d_projection_node` | 作为外部 TF 桥保留 | Nav2 需要 yaw-only `2d_body`；FSM 不发布 TF |
+| `alfa_nav_planning` Nav2 参数 | 复用参数思路 | `robot_base_frame=2d_body`、footprint、costmap 配置对真机仍有价值 |
+| `alfa_nav_control/path_follower_node` | 只抽控制律，不作为生产执行链 | 旧节点直接发 `/cmd_vel`，与当前 `/cmd_vel_align` / Nav2 边界冲突 |
+| `alfa_nav_behavior/behavior_goal_translator` | 抽箱面法向生成目标 pose 思路 | 当前作业位由策略层和 `business.yaml` 管理，不新增旧行为接口 |
+| `alfa_nav_goal_resolver` / `semantic_manager` | 暂不接入 | 当前 FSM 已有观察位/作业位配置；语义地标可作为后续运维工具 |
