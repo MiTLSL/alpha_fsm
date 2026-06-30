@@ -56,3 +56,26 @@
         publish_markers: true
         marker_topic: "/sim/markers"
         publish_private_topics: true
+
+      isaac:
+        enabled: false
+        use_sim_time: true
+
+        perception:
+          # param_truth: 不依赖 Isaac SDK，用参数或 YAML 描述箱体真值；
+          # isaac_sdk: 后续接 Isaac Python/ROS2 bridge 后读取 USD prim。
+          source_mode: "param_truth"
+          publish_rate_hz: 10.0
+          scene_truth_file: ""
+          boxes_json: ""
+          synthetic_latency_ms: 0.0
+          view:
+            max_distance_m: 3.0
+            horizontal_fov_rad: 2.2
+            z_min: -0.2
+            z_max: 2.8
+
+        chassis:
+          initial_enabled: true
+          initial_fault: false
+          status_publish_rate_hz: 10.0

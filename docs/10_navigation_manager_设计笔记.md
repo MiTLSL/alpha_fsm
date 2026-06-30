@@ -35,6 +35,7 @@
 - 已支持上层 cancel / `/safety/estop` 透传到 Nav2 goal，并显式发布零 `/cmd_vel_align`。
 - `require_fine_alignment=true` 时使用 `/perception/box_detections` 做视觉闭环，按距离误差和 yaw 误差发布 `/cmd_vel_align`；控制律吸收了旧 `alfa_nav_control/path_follower_node` 的限速、最小速度、死区和停发零速度思路，但不直接发 `/cmd_vel`。
 - 已从 `old_codes/robot_navigation` 抽取边界策略：Fast-LIO / Nav2 / 2D 投影 / 地图发布作为外部导航 workspace 或 overlay 运行，当前仓库只维护 `navigation_manager_node` 适配层；旧 `path_follower_node` 和 `goal_resolver` 不作为 FSM 入口复用。
+- L3-ISAAC 中 `navigation_manager_node` 仍只认 Nav2、AMCL、`/chassis_node/status`、`/cmd_vel_align` 和 `/nav/base_recovery` 契约；Isaac 底盘状态由 `isaac_chassis_bridge_node` 模拟，底盘运动桥后续作为下游 `/cmd_vel` 执行器接入。
 
 离线验收：
 
@@ -149,3 +150,13 @@ M2-SIM 用来在真机 Nav2 / chassis 未稳定前，先验证 navigation_manage
 | `alfa_nav_control/path_follower_node` | 只抽控制律，不作为生产执行链 | 旧节点直接发 `/cmd_vel`，与当前 `/cmd_vel_align` / Nav2 边界冲突 |
 | `alfa_nav_behavior/behavior_goal_translator` | 抽箱面法向生成目标 pose 思路 | 当前作业位由策略层和 `business.yaml` 管理，不新增旧行为接口 |
 | `alfa_nav_goal_resolver` / `semantic_manager` | 暂不接入 | 当前 FSM 已有观察位/作业位配置；语义地标可作为后续运维工具 |
+
+## 7. Isaac Sim 接入边界
+
+Isaac Sim 全流程仿真不改变 `navigation_manager_node` 的职责。它仍作为策略层唯一导航入口：
+
+```text
+strategy_node → /navigate_to_pose → navigation_manager_node → Nav2 / chassis / twist_mux
+```
+
+L3-ISAAC 第一阶段已经提供 `isaac_chassis_bridge_node`，用于发布 `/chassis_node/status` 并响应 reset/enable。待 Isaac 安装后，再补底盘运动桥接节点消费 twist_mux 输出 `/cmd_vel`，并让 `/cmd_vel_align` 按当前 FINE_ALIGN 通道参与速度仲裁。

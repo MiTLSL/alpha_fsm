@@ -12,6 +12,7 @@
   <exec_depend>fsm_core</exec_depend>
   <exec_depend>fsm_msgs</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>isaac_sim_bridge</exec_depend>
   <exec_depend>nav2_msgs</exec_depend>
   <exec_depend>navigation_manager</exec_depend>
   <exec_depend>pair_grasp_execution</exec_depend>

@@ -47,6 +47,7 @@ sevnova_fsm/
 │       ├── navigation_manager/
 │       ├── perception_adapter/
 │       ├── pair_grasp_execution/
+│       ├── isaac_sim_bridge/
 │       ├── vacuum_io/
 │       ├── safety_monitor/
 │       ├── fsm_test/
@@ -71,6 +72,7 @@ sevnova_fsm/
   - `navigation_manager`：导航 Action/恢复服务，对接 Nav2 与底盘能力。
   - `pair_grasp_execution`：抓取执行 Action，对接 MoveIt、控制器、真空链路。
   - `perception_adapter`：把感知上游结果转换成系统统一检测消息。
+  - `isaac_sim_bridge`：Isaac Sim 全流程仿真桥，第一阶段提供 groundTruth 感知和底盘状态/恢复协议。
   - `vacuum_io`：真空控制与压力/健康状态链路。
 
 - 安全层：
@@ -95,7 +97,7 @@ navigation_manager  perception_adapter  pair_grasp_execution
                                         vacuum_io
 ```
 
-这意味着 FSM 项目不是完全独立地“各控制各的”，也不是把所有真实算法和驱动塞进状态机包里。状态机只编排任务和恢复路径；Nav2、MoveIt、视觉感知、底盘驱动、真空硬件可以来自独立源码包或上游工作区，但进入本系统时必须经过 `navigation_manager`、`pair_grasp_execution`、`perception_adapter`、`vacuum_io` 这些边界节点。
+这意味着 FSM 项目不是完全独立地“各控制各的”，也不是把所有真实算法和驱动塞进状态机包里。状态机只编排任务和恢复路径；Nav2、MoveIt、视觉感知、底盘驱动、真空硬件和 Isaac Sim 仿真可以来自独立源码包或上游工作区，但进入本系统时必须经过 `navigation_manager`、`pair_grasp_execution`、`perception_adapter`、`isaac_sim_bridge`、`vacuum_io` 这些边界节点。
 
 ## 包职责总览
 
@@ -110,6 +112,7 @@ navigation_manager  perception_adapter  pair_grasp_execution
 | `navigation_manager` | 适配节点 | `NavigateToPose`、底盘恢复、FINE_ALIGN/定位检查 |
 | `perception_adapter` | 适配节点 | 外部感知结果转内部标准消息，并维护 perception health |
 | `pair_grasp_execution` | 适配节点 | `ExecutePairGrasp`，支持 `dry_run / fake_real / real` |
+| `isaac_sim_bridge` | 仿真适配节点 | Isaac groundTruth 感知、底盘状态和后续底盘/机械臂/抓取桥接 |
 | `vacuum_io` | 适配节点 | 真空命令、压力模拟/采集、健康状态 |
 | `safety_monitor` | 安全节点 | 急停与安全状态闭环 |
 | `fsm_test` | 测试包 | mock 节点、launch、pytest、集成辅助 |
@@ -134,6 +137,7 @@ navigation_manager  perception_adapter  pair_grasp_execution
 - `docs/10_navigation_manager_设计笔记.md`
 - `docs/11_pair_grasp_execution_设计笔记.md`
 - `docs/12_M2离线预集成计划.md`
+- `docs/13_isaac_sim_full_flow_plan.md`
 
 ## 开发环境
 
@@ -230,6 +234,8 @@ ros2 launch fsm_config bringup_strategy_only.launch.py
   - FSM 运行参数
 - `interfaces.yaml`
   - topic/service/action 名称与外部接口映射
+- `sim.yaml`
+  - 轻量仿真和 Isaac Sim 仿真参数
 - `error_codes.yaml`
   - 错误码与恢复策略覆盖
 - `logging.yaml`
@@ -314,8 +320,8 @@ python3 scripts/m2_pre_grasp_fake_real_smoke.py
 
 当前仓库更适合的理解方式是：
 
-- 作为一个已经完成 `M1`、正在推进 `M2/L3-SIM` 的 ROS 2 FSM 工程基线
-- 既能支撑纯 mock 开发，也能逐步替换为真实导航、真实抓取和真实感知
+- 作为一个已经完成 `M1`、正在推进 `M2/L3-SIM/L3-ISAAC` 的 ROS 2 FSM 工程基线
+- 既能支撑纯 mock 开发，也能逐步替换为真实导航、真实抓取、真实感知和 Isaac Sim groundTruth 仿真
 
 ## 建议的新接手顺序
 
@@ -327,7 +333,7 @@ python3 scripts/m2_pre_grasp_fake_real_smoke.py
 4. 看 `fsm_config/launch` 和 `fsm_config/params`
 5. 运行 `m0_self_check.py`
 6. 运行 `m1_mock_bringup_smoke.py`
-7. 再根据你负责的模块进入 `navigation_manager`、`perception_adapter`、`pair_grasp_execution` 等包
+7. 再根据你负责的模块进入 `navigation_manager`、`perception_adapter`、`pair_grasp_execution`、`isaac_sim_bridge` 等包
 
 ## 参考入口
 
@@ -337,3 +343,4 @@ python3 scripts/m2_pre_grasp_fake_real_smoke.py
 - 配置说明：`docs/05_配置与参数清单.md`
 - 测试分层：`docs/07_Mock规格与测试用例.md`
 - 路线图：`docs/09_任务拆解.md`
+- Isaac 全流程仿真：`docs/13_isaac_sim_full_flow_plan.md`
