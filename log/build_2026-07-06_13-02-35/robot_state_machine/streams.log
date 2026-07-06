@@ -1,0 +1,18 @@
+[0.448s] Invoking command in '/home/sevnova/ros2_ws/build/robot_state_machine': AMENT_PREFIX_PATH=/home/sevnova/ros2_ws/install/robot_msgs:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/sevnova/ros2_ws/install/robot_msgs:${CMAKE_PREFIX_PATH} CONDA_PROMPT_MODIFIER=(base) LD_LIBRARY_PATH=/home/sevnova/ros2_ws/install/robot_msgs/lib:${LD_LIBRARY_PATH} PYTHONPATH=/home/sevnova/ros2_ws/build/robot_state_machine/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/sevnova/ros2_ws/install/robot_state_machine/lib/python3.10/site-packages:/home/sevnova/ros2_ws/install/robot_msgs/local/lib/python3.10/dist-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/sevnova/ros2_ws/build/robot_state_machine/build --no-deps symlink_data
+[0.574s] running develop
+[0.647s] running egg_info
+[0.647s] writing robot_state_machine.egg-info/PKG-INFO
+[0.647s] writing dependency_links to robot_state_machine.egg-info/dependency_links.txt
+[0.647s] writing entry points to robot_state_machine.egg-info/entry_points.txt
+[0.647s] writing requirements to robot_state_machine.egg-info/requires.txt
+[0.647s] writing top-level names to robot_state_machine.egg-info/top_level.txt
+[0.648s] reading manifest file 'robot_state_machine.egg-info/SOURCES.txt'
+[0.649s] writing manifest file 'robot_state_machine.egg-info/SOURCES.txt'
+[0.650s] running build_ext
+[0.650s] Creating /home/sevnova/ros2_ws/install/robot_state_machine/lib/python3.10/site-packages/robot-state-machine.egg-link (link to .)
+[0.651s] Installing alfa_task_state_machine_node script to /home/sevnova/ros2_ws/install/robot_state_machine/lib/robot_state_machine
+[0.651s] Installing state_summary_node script to /home/sevnova/ros2_ws/install/robot_state_machine/lib/robot_state_machine
+[0.651s] 
+[0.651s] Installed /home/sevnova/ros2_ws/build/robot_state_machine
+[0.651s] running symlink_data
+[0.664s] Invoked command in '/home/sevnova/ros2_ws/build/robot_state_machine' returned '0': AMENT_PREFIX_PATH=/home/sevnova/ros2_ws/install/robot_msgs:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/sevnova/ros2_ws/install/robot_msgs:${CMAKE_PREFIX_PATH} CONDA_PROMPT_MODIFIER=(base) LD_LIBRARY_PATH=/home/sevnova/ros2_ws/install/robot_msgs/lib:${LD_LIBRARY_PATH} PYTHONPATH=/home/sevnova/ros2_ws/build/robot_state_machine/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/sevnova/ros2_ws/install/robot_state_machine/lib/python3.10/site-packages:/home/sevnova/ros2_ws/install/robot_msgs/local/lib/python3.10/dist-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/sevnova/ros2_ws/build/robot_state_machine/build --no-deps symlink_data

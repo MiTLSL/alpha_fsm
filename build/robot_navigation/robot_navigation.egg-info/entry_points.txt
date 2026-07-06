@@ -1,0 +1,4 @@
+[console_scripts]
+cmd_vel_to_alfa_node = robot_navigation.cmd_vel_to_alfa_node:main
+nav_goal_sender = robot_navigation.nav_goal_sender:main
+

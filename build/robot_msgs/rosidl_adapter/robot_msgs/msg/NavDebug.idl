@@ -1,0 +1,28 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from robot_msgs/msg/NavDebug.msg
+// generated code does not contain a copyright notice
+
+#include "geometry_msgs/msg/PoseStamped.idl"
+#include "std_msgs/msg/Header.idl"
+
+module robot_msgs {
+  module msg {
+    struct NavDebug {
+      std_msgs::msg::Header header;
+
+      string source;
+
+      string goal_type;
+
+      geometry_msgs::msg::PoseStamped target_pose;
+
+      float distance_remaining;
+
+      float yaw_error;
+
+      string status;
+
+      string details_json;
+    };
+  };
+};

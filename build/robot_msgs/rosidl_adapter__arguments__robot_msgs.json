@@ -1,0 +1,7 @@
+{
+  "package_name": "robot_msgs",
+  "non_idl_tuples": [
+    "/home/sevnova/ros2_ws/src/robot_msgs:msg/BehaviorState.msg",
+    "/home/sevnova/ros2_ws/src/robot_msgs:msg/NavDebug.msg"
+  ]
+}

@@ -1,0 +1,3 @@
+[console_scripts]
+validation_status_node = isaac_visualization_bridge.validation_status_node:main
+

@@ -1,0 +1,387 @@
+[0.103s] DEBUG:colcon:Command line arguments: ['/usr/bin/colcon', 'build', '--symlink-install']
+[0.103s] DEBUG:colcon:Parsed command line arguments: Namespace(log_base=None, log_level=None, verb_name='build', build_base='build', install_base='install', merge_install=False, symlink_install=True, test_result_base=None, continue_on_error=False, executor='parallel', parallel_workers=32, event_handlers=None, ignore_user_meta=False, metas=['./colcon.meta'], base_paths=['.'], packages_ignore=None, packages_ignore_regex=None, paths=None, packages_up_to=None, packages_up_to_regex=None, packages_above=None, packages_above_and_dependencies=None, packages_above_depth=None, packages_select_by_dep=None, packages_skip_by_dep=None, packages_skip_up_to=None, packages_select_build_failed=False, packages_skip_build_finished=False, packages_select_test_failures=False, packages_skip_test_passed=False, packages_select=None, packages_skip=None, packages_select_regex=None, packages_skip_regex=None, packages_start=None, packages_end=None, allow_overriding=[], cmake_args=None, cmake_target=None, cmake_target_skip_unavailable=False, cmake_clean_cache=False, cmake_clean_first=False, cmake_force_configure=False, ament_cmake_args=None, catkin_cmake_args=None, catkin_skip_building_tests=False, mixin_files=None, mixin=None, verb_parser=<colcon_mixin.mixin.mixin_argument.MixinArgumentDecorator object at 0x7f69d7565c90>, verb_extension=<colcon_core.verb.build.BuildVerb object at 0x7f69d7565720>, main=<bound method BuildVerb.main of <colcon_core.verb.build.BuildVerb object at 0x7f69d7565720>>, mixin_verb=('build',))
+[0.347s] Level 1:colcon.colcon_core.package_discovery:discover_packages(colcon_meta) check parameters
+[0.348s] Level 1:colcon.colcon_core.package_discovery:discover_packages(recursive) check parameters
+[0.348s] Level 1:colcon.colcon_core.package_discovery:discover_packages(ignore) check parameters
+[0.348s] Level 1:colcon.colcon_core.package_discovery:discover_packages(path) check parameters
+[0.348s] Level 1:colcon.colcon_core.package_discovery:discover_packages(colcon_meta) discover
+[0.348s] Level 1:colcon.colcon_core.package_discovery:discover_packages(recursive) discover
+[0.348s] INFO:colcon.colcon_core.package_discovery:Crawling recursively for packages in '/home/sevnova/ros2_ws'
+[0.348s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['ignore', 'ignore_ament_install']
+[0.348s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'ignore'
+[0.348s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'ignore_ament_install'
+[0.349s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['colcon_pkg']
+[0.349s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'colcon_pkg'
+[0.349s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['colcon_meta']
+[0.349s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'colcon_meta'
+[0.349s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['ros']
+[0.349s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'ros'
+[0.359s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['cmake', 'python']
+[0.359s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'cmake'
+[0.359s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'python'
+[0.359s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['python_setup_py']
+[0.359s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'python_setup_py'
+[0.360s] Level 1:colcon.colcon_core.package_identification:_identify(build) by extensions ['ignore', 'ignore_ament_install']
+[0.360s] Level 1:colcon.colcon_core.package_identification:_identify(build) by extension 'ignore'
+[0.360s] Level 1:colcon.colcon_core.package_identification:_identify(build) ignored
+[0.360s] Level 1:colcon.colcon_core.package_identification:_identify(install) by extensions ['ignore', 'ignore_ament_install']
+[0.360s] Level 1:colcon.colcon_core.package_identification:_identify(install) by extension 'ignore'
+[0.360s] Level 1:colcon.colcon_core.package_identification:_identify(install) ignored
+[0.360s] Level 1:colcon.colcon_core.package_identification:_identify(log) by extensions ['ignore', 'ignore_ament_install']
+[0.360s] Level 1:colcon.colcon_core.package_identification:_identify(log) by extension 'ignore'
+[0.360s] Level 1:colcon.colcon_core.package_identification:_identify(log) ignored
+[0.360s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extensions ['ignore', 'ignore_ament_install']
+[0.360s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extension 'ignore'
+[0.361s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extension 'ignore_ament_install'
+[0.361s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extensions ['colcon_pkg']
+[0.361s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extension 'colcon_pkg'
+[0.361s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extensions ['colcon_meta']
+[0.361s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extension 'colcon_meta'
+[0.361s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extensions ['ros']
+[0.361s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extension 'ros'
+[0.361s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extensions ['cmake', 'python']
+[0.361s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extension 'cmake'
+[0.361s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extension 'python'
+[0.361s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extensions ['python_setup_py']
+[0.361s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extension 'python_setup_py'
+[0.361s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extensions ['ignore', 'ignore_ament_install']
+[0.361s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extension 'ignore'
+[0.361s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extension 'ignore_ament_install'
+[0.361s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extensions ['colcon_pkg']
+[0.361s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extension 'colcon_pkg'
+[0.361s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extensions ['colcon_meta']
+[0.361s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extension 'colcon_meta'
+[0.361s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extensions ['ros']
+[0.361s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extension 'ros'
+[0.361s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extensions ['cmake', 'python']
+[0.361s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extension 'cmake'
+[0.361s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extension 'python'
+[0.361s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extensions ['python_setup_py']
+[0.361s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extension 'python_setup_py'
+[0.362s] Level 1:colcon.colcon_core.package_identification:_identify(src/isaac_visualization_bridge) by extensions ['ignore', 'ignore_ament_install']
+[0.362s] Level 1:colcon.colcon_core.package_identification:_identify(src/isaac_visualization_bridge) by extension 'ignore'
+[0.362s] Level 1:colcon.colcon_core.package_identification:_identify(src/isaac_visualization_bridge) by extension 'ignore_ament_install'
+[0.362s] Level 1:colcon.colcon_core.package_identification:_identify(src/isaac_visualization_bridge) by extensions ['colcon_pkg']
+[0.362s] Level 1:colcon.colcon_core.package_identification:_identify(src/isaac_visualization_bridge) by extension 'colcon_pkg'
+[0.362s] Level 1:colcon.colcon_core.package_identification:_identify(src/isaac_visualization_bridge) by extensions ['colcon_meta']
+[0.362s] Level 1:colcon.colcon_core.package_identification:_identify(src/isaac_visualization_bridge) by extension 'colcon_meta'
+[0.362s] Level 1:colcon.colcon_core.package_identification:_identify(src/isaac_visualization_bridge) by extensions ['ros']
+[0.362s] Level 1:colcon.colcon_core.package_identification:_identify(src/isaac_visualization_bridge) by extension 'ros'
+[0.364s] DEBUG:colcon.colcon_core.package_identification:Package 'src/isaac_visualization_bridge' with type 'ros.ament_python' and name 'isaac_visualization_bridge'
+[0.364s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_bringup) by extensions ['ignore', 'ignore_ament_install']
+[0.364s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_bringup) by extension 'ignore'
+[0.365s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_bringup) by extension 'ignore_ament_install'
+[0.365s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_bringup) by extensions ['colcon_pkg']
+[0.365s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_bringup) by extension 'colcon_pkg'
+[0.365s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_bringup) by extensions ['colcon_meta']
+[0.365s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_bringup) by extension 'colcon_meta'
+[0.365s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_bringup) by extensions ['ros']
+[0.365s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_bringup) by extension 'ros'
+[0.365s] DEBUG:colcon.colcon_core.package_identification:Package 'src/robot_bringup' with type 'ros.ament_python' and name 'robot_bringup'
+[0.365s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_msgs) by extensions ['ignore', 'ignore_ament_install']
+[0.365s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_msgs) by extension 'ignore'
+[0.365s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_msgs) by extension 'ignore_ament_install'
+[0.365s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_msgs) by extensions ['colcon_pkg']
+[0.365s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_msgs) by extension 'colcon_pkg'
+[0.365s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_msgs) by extensions ['colcon_meta']
+[0.365s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_msgs) by extension 'colcon_meta'
+[0.366s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_msgs) by extensions ['ros']
+[0.366s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_msgs) by extension 'ros'
+[0.366s] DEBUG:colcon.colcon_core.package_identification:Package 'src/robot_msgs' with type 'ros.ament_cmake' and name 'robot_msgs'
+[0.366s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_navigation) by extensions ['ignore', 'ignore_ament_install']
+[0.366s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_navigation) by extension 'ignore'
+[0.366s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_navigation) by extension 'ignore_ament_install'
+[0.366s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_navigation) by extensions ['colcon_pkg']
+[0.366s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_navigation) by extension 'colcon_pkg'
+[0.366s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_navigation) by extensions ['colcon_meta']
+[0.366s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_navigation) by extension 'colcon_meta'
+[0.366s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_navigation) by extensions ['ros']
+[0.366s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_navigation) by extension 'ros'
+[0.367s] DEBUG:colcon.colcon_core.package_identification:Package 'src/robot_navigation' with type 'ros.ament_python' and name 'robot_navigation'
+[0.367s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_state_machine) by extensions ['ignore', 'ignore_ament_install']
+[0.367s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_state_machine) by extension 'ignore'
+[0.367s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_state_machine) by extension 'ignore_ament_install'
+[0.367s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_state_machine) by extensions ['colcon_pkg']
+[0.367s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_state_machine) by extension 'colcon_pkg'
+[0.367s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_state_machine) by extensions ['colcon_meta']
+[0.367s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_state_machine) by extension 'colcon_meta'
+[0.367s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_state_machine) by extensions ['ros']
+[0.367s] Level 1:colcon.colcon_core.package_identification:_identify(src/robot_state_machine) by extension 'ros'
+[0.368s] DEBUG:colcon.colcon_core.package_identification:Package 'src/robot_state_machine' with type 'ros.ament_python' and name 'robot_state_machine'
+[0.368s] Level 1:colcon.colcon_core.package_discovery:discover_packages(recursive) using defaults
+[0.368s] Level 1:colcon.colcon_core.package_discovery:discover_packages(ignore) discover
+[0.368s] Level 1:colcon.colcon_core.package_discovery:discover_packages(ignore) using defaults
+[0.368s] Level 1:colcon.colcon_core.package_discovery:discover_packages(path) discover
+[0.368s] Level 1:colcon.colcon_core.package_discovery:discover_packages(path) using defaults
+[0.400s] Level 1:colcon.colcon_core.package_discovery:discover_packages(prefix_path) check parameters
+[0.400s] Level 1:colcon.colcon_core.package_discovery:discover_packages(prefix_path) discover
+[0.407s] DEBUG:colcon.colcon_installed_package_information.package_discovery:Found 13 installed packages in /home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install
+[0.407s] DEBUG:colcon.colcon_installed_package_information.package_discovery:Found 273 installed packages in /opt/ros/humble
+[0.408s] Level 1:colcon.colcon_core.package_discovery:discover_packages(prefix_path) using defaults
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'isaac_visualization_bridge' build argument 'cmake_args' from command line to 'None'
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'isaac_visualization_bridge' build argument 'cmake_target' from command line to 'None'
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'isaac_visualization_bridge' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'isaac_visualization_bridge' build argument 'cmake_clean_cache' from command line to 'False'
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'isaac_visualization_bridge' build argument 'cmake_clean_first' from command line to 'False'
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'isaac_visualization_bridge' build argument 'cmake_force_configure' from command line to 'False'
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'isaac_visualization_bridge' build argument 'ament_cmake_args' from command line to 'None'
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'isaac_visualization_bridge' build argument 'catkin_cmake_args' from command line to 'None'
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'isaac_visualization_bridge' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.430s] DEBUG:colcon.colcon_core.verb:Building package 'isaac_visualization_bridge' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/sevnova/ros2_ws/build/isaac_visualization_bridge', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/sevnova/ros2_ws/install/isaac_visualization_bridge', 'merge_install': False, 'path': '/home/sevnova/ros2_ws/src/isaac_visualization_bridge', 'symlink_install': True, 'test_result_base': None}
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'robot_msgs' build argument 'cmake_args' from command line to 'None'
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'robot_msgs' build argument 'cmake_target' from command line to 'None'
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'robot_msgs' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'robot_msgs' build argument 'cmake_clean_cache' from command line to 'False'
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'robot_msgs' build argument 'cmake_clean_first' from command line to 'False'
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'robot_msgs' build argument 'cmake_force_configure' from command line to 'False'
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'robot_msgs' build argument 'ament_cmake_args' from command line to 'None'
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'robot_msgs' build argument 'catkin_cmake_args' from command line to 'None'
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'robot_msgs' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.430s] DEBUG:colcon.colcon_core.verb:Building package 'robot_msgs' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/sevnova/ros2_ws/build/robot_msgs', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/sevnova/ros2_ws/install/robot_msgs', 'merge_install': False, 'path': '/home/sevnova/ros2_ws/src/robot_msgs', 'symlink_install': True, 'test_result_base': None}
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'robot_navigation' build argument 'cmake_args' from command line to 'None'
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'robot_navigation' build argument 'cmake_target' from command line to 'None'
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'robot_navigation' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'robot_navigation' build argument 'cmake_clean_cache' from command line to 'False'
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'robot_navigation' build argument 'cmake_clean_first' from command line to 'False'
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'robot_navigation' build argument 'cmake_force_configure' from command line to 'False'
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'robot_navigation' build argument 'ament_cmake_args' from command line to 'None'
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'robot_navigation' build argument 'catkin_cmake_args' from command line to 'None'
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'robot_navigation' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.430s] DEBUG:colcon.colcon_core.verb:Building package 'robot_navigation' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/sevnova/ros2_ws/build/robot_navigation', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/sevnova/ros2_ws/install/robot_navigation', 'merge_install': False, 'path': '/home/sevnova/ros2_ws/src/robot_navigation', 'symlink_install': True, 'test_result_base': None}
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'robot_state_machine' build argument 'cmake_args' from command line to 'None'
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'robot_state_machine' build argument 'cmake_target' from command line to 'None'
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'robot_state_machine' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'robot_state_machine' build argument 'cmake_clean_cache' from command line to 'False'
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'robot_state_machine' build argument 'cmake_clean_first' from command line to 'False'
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'robot_state_machine' build argument 'cmake_force_configure' from command line to 'False'
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'robot_state_machine' build argument 'ament_cmake_args' from command line to 'None'
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'robot_state_machine' build argument 'catkin_cmake_args' from command line to 'None'
+[0.430s] Level 5:colcon.colcon_core.verb:set package 'robot_state_machine' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.430s] DEBUG:colcon.colcon_core.verb:Building package 'robot_state_machine' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/sevnova/ros2_ws/build/robot_state_machine', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/sevnova/ros2_ws/install/robot_state_machine', 'merge_install': False, 'path': '/home/sevnova/ros2_ws/src/robot_state_machine', 'symlink_install': True, 'test_result_base': None}
+[0.431s] Level 5:colcon.colcon_core.verb:set package 'robot_bringup' build argument 'cmake_args' from command line to 'None'
+[0.431s] Level 5:colcon.colcon_core.verb:set package 'robot_bringup' build argument 'cmake_target' from command line to 'None'
+[0.431s] Level 5:colcon.colcon_core.verb:set package 'robot_bringup' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.431s] Level 5:colcon.colcon_core.verb:set package 'robot_bringup' build argument 'cmake_clean_cache' from command line to 'False'
+[0.431s] Level 5:colcon.colcon_core.verb:set package 'robot_bringup' build argument 'cmake_clean_first' from command line to 'False'
+[0.431s] Level 5:colcon.colcon_core.verb:set package 'robot_bringup' build argument 'cmake_force_configure' from command line to 'False'
+[0.431s] Level 5:colcon.colcon_core.verb:set package 'robot_bringup' build argument 'ament_cmake_args' from command line to 'None'
+[0.431s] Level 5:colcon.colcon_core.verb:set package 'robot_bringup' build argument 'catkin_cmake_args' from command line to 'None'
+[0.431s] Level 5:colcon.colcon_core.verb:set package 'robot_bringup' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.431s] DEBUG:colcon.colcon_core.verb:Building package 'robot_bringup' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/sevnova/ros2_ws/build/robot_bringup', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/sevnova/ros2_ws/install/robot_bringup', 'merge_install': False, 'path': '/home/sevnova/ros2_ws/src/robot_bringup', 'symlink_install': True, 'test_result_base': None}
+[0.431s] INFO:colcon.colcon_core.executor:Executing jobs using 'parallel' executor
+[0.431s] DEBUG:colcon.colcon_parallel_executor.executor.parallel:run_until_complete
+[0.432s] INFO:colcon.colcon_ros.task.ament_cmake.build:Building ROS package in '/home/sevnova/ros2_ws/src/robot_msgs' with build type 'ament_cmake'
+[0.432s] INFO:colcon.colcon_cmake.task.cmake.build:Building CMake package in '/home/sevnova/ros2_ws/src/robot_msgs'
+[0.435s] INFO:colcon.colcon_core.plugin_system:Skipping extension 'colcon_core.shell.bat': Not used on non-Windows systems
+[0.435s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.435s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
+[0.438s] INFO:colcon.colcon_ros.task.ament_python.build:Building ROS package in '/home/sevnova/ros2_ws/src/isaac_visualization_bridge' with build type 'ament_python'
+[0.438s] Level 1:colcon.colcon_core.shell:create_environment_hook('isaac_visualization_bridge', 'ament_prefix_path')
+[0.438s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/sevnova/ros2_ws/install/isaac_visualization_bridge/share/isaac_visualization_bridge/hook/ament_prefix_path.ps1'
+[0.439s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/sevnova/ros2_ws/install/isaac_visualization_bridge/share/isaac_visualization_bridge/hook/ament_prefix_path.dsv'
+[0.439s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/sevnova/ros2_ws/install/isaac_visualization_bridge/share/isaac_visualization_bridge/hook/ament_prefix_path.sh'
+[0.440s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.440s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
+[0.442s] INFO:colcon.colcon_ros.task.ament_python.build:Building ROS package in '/home/sevnova/ros2_ws/src/robot_navigation' with build type 'ament_python'
+[0.442s] Level 1:colcon.colcon_core.shell:create_environment_hook('robot_navigation', 'ament_prefix_path')
+[0.442s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/sevnova/ros2_ws/install/robot_navigation/share/robot_navigation/hook/ament_prefix_path.ps1'
+[0.442s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/sevnova/ros2_ws/install/robot_navigation/share/robot_navigation/hook/ament_prefix_path.dsv'
+[0.442s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/sevnova/ros2_ws/install/robot_navigation/share/robot_navigation/hook/ament_prefix_path.sh'
+[0.443s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.443s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
+[0.448s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/sevnova/ros2_ws/build/robot_msgs': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/fsm_config:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/fsm_test:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/wall_destacking_strategy:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/vacuum_io:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/task_manager:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/safety_monitor:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/perception_adapter:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/pair_grasp_execution:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/navigation_manager:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/isaac_sim_bridge:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/fsm_core:/opt/ros/humble CONDA_PROMPT_MODIFIER=(base) /usr/bin/cmake --build /home/sevnova/ros2_ws/build/robot_msgs -- -j32 -l32
+[0.591s] INFO:colcon.colcon_core.task.python.build:Building Python package in '/home/sevnova/ros2_ws/src/isaac_visualization_bridge'
+[0.591s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.591s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
+[0.742s] INFO:colcon.colcon_core.task.python.build:Building Python package in '/home/sevnova/ros2_ws/src/robot_navigation'
+[0.742s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.742s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
+[0.746s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/sevnova/ros2_ws/build/robot_msgs' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/fsm_config:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/fsm_test:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/wall_destacking_strategy:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/vacuum_io:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/task_manager:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/safety_monitor:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/perception_adapter:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/pair_grasp_execution:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/navigation_manager:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/isaac_sim_bridge:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/fsm_core:/opt/ros/humble CONDA_PROMPT_MODIFIER=(base) /usr/bin/cmake --build /home/sevnova/ros2_ws/build/robot_msgs -- -j32 -l32
+[0.752s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/sevnova/ros2_ws/build/robot_msgs': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/fsm_config:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/fsm_test:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/wall_destacking_strategy:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/vacuum_io:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/task_manager:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/safety_monitor:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/perception_adapter:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/pair_grasp_execution:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/navigation_manager:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/isaac_sim_bridge:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/fsm_core:/opt/ros/humble CONDA_PROMPT_MODIFIER=(base) /usr/bin/cmake --install /home/sevnova/ros2_ws/build/robot_msgs
+[0.821s] Level 1:colcon.colcon_core.environment:create_environment_scripts_only(robot_msgs)
+[0.822s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/sevnova/ros2_ws/build/robot_msgs' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/fsm_config:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/fsm_test:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/wall_destacking_strategy:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/vacuum_io:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/task_manager:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/safety_monitor:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/perception_adapter:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/pair_grasp_execution:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/navigation_manager:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/isaac_sim_bridge:/home/sevnova/projects/fsm_simulation_plan/alpha_fsm/fsm_ws/install/fsm_core:/opt/ros/humble CONDA_PROMPT_MODIFIER=(base) /usr/bin/cmake --install /home/sevnova/ros2_ws/build/robot_msgs
+[0.826s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_msgs' for CMake module files
+[0.827s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_msgs' for CMake config files
+[0.828s] Level 1:colcon.colcon_core.shell:create_environment_hook('robot_msgs', 'cmake_prefix_path')
+[0.828s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/sevnova/ros2_ws/install/robot_msgs/share/robot_msgs/hook/cmake_prefix_path.ps1'
+[0.829s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/sevnova/ros2_ws/install/robot_msgs/share/robot_msgs/hook/cmake_prefix_path.dsv'
+[0.829s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/sevnova/ros2_ws/install/robot_msgs/share/robot_msgs/hook/cmake_prefix_path.sh'
+[0.829s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_msgs/lib'
+[0.829s] Level 1:colcon.colcon_core.shell:create_environment_hook('robot_msgs', 'ld_library_path_lib')
+[0.829s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/sevnova/ros2_ws/install/robot_msgs/share/robot_msgs/hook/ld_library_path_lib.ps1'
+[0.830s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/sevnova/ros2_ws/install/robot_msgs/share/robot_msgs/hook/ld_library_path_lib.dsv'
+[0.830s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/sevnova/ros2_ws/install/robot_msgs/share/robot_msgs/hook/ld_library_path_lib.sh'
+[0.830s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_msgs/bin'
+[0.830s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_msgs/lib/pkgconfig/robot_msgs.pc'
+[0.830s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_msgs/lib/python3.10/site-packages'
+[0.830s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_msgs/bin'
+[0.830s] INFO:colcon.colcon_core.shell:Creating package script '/home/sevnova/ros2_ws/install/robot_msgs/share/robot_msgs/package.ps1'
+[0.831s] INFO:colcon.colcon_core.shell:Creating package descriptor '/home/sevnova/ros2_ws/install/robot_msgs/share/robot_msgs/package.dsv'
+[0.832s] INFO:colcon.colcon_core.shell:Creating package script '/home/sevnova/ros2_ws/install/robot_msgs/share/robot_msgs/package.sh'
+[0.833s] INFO:colcon.colcon_core.shell:Creating package script '/home/sevnova/ros2_ws/install/robot_msgs/share/robot_msgs/package.bash'
+[0.833s] INFO:colcon.colcon_core.shell:Creating package script '/home/sevnova/ros2_ws/install/robot_msgs/share/robot_msgs/package.zsh'
+[0.834s] Level 1:colcon.colcon_core.environment:create_file_with_runtime_dependencies(/home/sevnova/ros2_ws/install/robot_msgs/share/colcon-core/packages/robot_msgs)
+[0.834s] Level 1:colcon.colcon_core.environment:create_environment_scripts_only(robot_msgs)
+[0.835s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_msgs' for CMake module files
+[0.835s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_msgs' for CMake config files
+[0.835s] Level 1:colcon.colcon_core.shell:create_environment_hook('robot_msgs', 'cmake_prefix_path')
+[0.835s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/sevnova/ros2_ws/install/robot_msgs/share/robot_msgs/hook/cmake_prefix_path.ps1'
+[0.835s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/sevnova/ros2_ws/install/robot_msgs/share/robot_msgs/hook/cmake_prefix_path.dsv'
+[0.836s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/sevnova/ros2_ws/install/robot_msgs/share/robot_msgs/hook/cmake_prefix_path.sh'
+[0.836s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_msgs/lib'
+[0.836s] Level 1:colcon.colcon_core.shell:create_environment_hook('robot_msgs', 'ld_library_path_lib')
+[0.836s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/sevnova/ros2_ws/install/robot_msgs/share/robot_msgs/hook/ld_library_path_lib.ps1'
+[0.836s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/sevnova/ros2_ws/install/robot_msgs/share/robot_msgs/hook/ld_library_path_lib.dsv'
+[0.836s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/sevnova/ros2_ws/install/robot_msgs/share/robot_msgs/hook/ld_library_path_lib.sh'
+[0.837s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_msgs/bin'
+[0.837s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_msgs/lib/pkgconfig/robot_msgs.pc'
+[0.837s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_msgs/lib/python3.10/site-packages'
+[0.837s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_msgs/bin'
+[0.837s] INFO:colcon.colcon_core.shell:Creating package script '/home/sevnova/ros2_ws/install/robot_msgs/share/robot_msgs/package.ps1'
+[0.837s] INFO:colcon.colcon_core.shell:Creating package descriptor '/home/sevnova/ros2_ws/install/robot_msgs/share/robot_msgs/package.dsv'
+[0.838s] INFO:colcon.colcon_core.shell:Creating package script '/home/sevnova/ros2_ws/install/robot_msgs/share/robot_msgs/package.sh'
+[0.838s] INFO:colcon.colcon_core.shell:Creating package script '/home/sevnova/ros2_ws/install/robot_msgs/share/robot_msgs/package.bash'
+[0.839s] INFO:colcon.colcon_core.shell:Creating package script '/home/sevnova/ros2_ws/install/robot_msgs/share/robot_msgs/package.zsh'
+[0.839s] Level 1:colcon.colcon_core.environment:create_file_with_runtime_dependencies(/home/sevnova/ros2_ws/install/robot_msgs/share/colcon-core/packages/robot_msgs)
+[0.839s] INFO:colcon.colcon_ros.task.ament_python.build:Building ROS package in '/home/sevnova/ros2_ws/src/robot_state_machine' with build type 'ament_python'
+[0.839s] Level 1:colcon.colcon_core.shell:create_environment_hook('robot_state_machine', 'ament_prefix_path')
+[0.840s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/sevnova/ros2_ws/install/robot_state_machine/share/robot_state_machine/hook/ament_prefix_path.ps1'
+[0.840s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/sevnova/ros2_ws/install/robot_state_machine/share/robot_state_machine/hook/ament_prefix_path.dsv'
+[0.841s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/sevnova/ros2_ws/install/robot_state_machine/share/robot_state_machine/hook/ament_prefix_path.sh'
+[0.841s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.841s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
+[0.983s] INFO:colcon.colcon_core.task.python.build:Building Python package in '/home/sevnova/ros2_ws/src/robot_state_machine'
+[0.984s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.984s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
+[1.045s] DEBUG:colcon.colcon_core.task.python.build:Available setuptools commands: check, sdist, install, alias, easy_install, extract_messages, build, bdist_rpm, upload_docs, build_ext, install_data, bdist, install_scripts, saveopts, dist_info, egg_info, test, rotate, install_egg_info, bdist_wheel, clean, build_py, update_catalog, compile_catalog, install_lib, develop, build_scripts, install_headers, init_catalog, register, upload, build_clib, bdist_egg, bdist_dumb, symlink_data, setopt
+[1.046s] DEBUG:colcon.colcon_core.task.python.build:Available setuptools commands: check, sdist, install, alias, easy_install, extract_messages, build, bdist_rpm, upload_docs, build_ext, install_data, bdist, install_scripts, saveopts, dist_info, egg_info, test, rotate, install_egg_info, bdist_wheel, clean, build_py, update_catalog, compile_catalog, install_lib, develop, build_scripts, install_headers, init_catalog, register, upload, build_clib, bdist_egg, bdist_dumb, symlink_data, setopt
+[1.226s] DEBUG:colcon.colcon_core.task.python.build:Available setuptools 'develop' options: --exclude-scripts, --editable, --site-dirs, --allow-hosts, --force-installation-into-system-dir, --install-dir, --no-user-cfg, --record, --egg-path, --prefix, --zip-ok, --install-layout, --script-dir, --version, --index-url, --always-copy, --quiet, --user, --no-find-links, --uninstall, --verbose, --find-links, --multi-version, --always-unzip, --no-deps, --build-directory, --help, --dry-run, --local-snapshots-ok, --upgrade, --optimize
+[1.228s] DEBUG:colcon.colcon_core.task.python.build:Available setuptools commands: check, sdist, install, alias, easy_install, extract_messages, build, bdist_rpm, upload_docs, build_ext, install_data, bdist, install_scripts, saveopts, dist_info, egg_info, test, rotate, install_egg_info, bdist_wheel, clean, build_py, update_catalog, compile_catalog, install_lib, develop, build_scripts, install_headers, init_catalog, register, upload, build_clib, bdist_egg, bdist_dumb, symlink_data, setopt
+[1.230s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/sevnova/ros2_ws/build/robot_navigation': CONDA_PROMPT_MODIFIER=(base) PYTHONPATH=/home/sevnova/ros2_ws/build/robot_navigation/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/sevnova/ros2_ws/install/robot_navigation/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/sevnova/ros2_ws/build/robot_navigation/build --no-deps symlink_data
+[1.233s] DEBUG:colcon.colcon_core.task.python.build:Available setuptools 'develop' options: --exclude-scripts, --editable, --site-dirs, --allow-hosts, --force-installation-into-system-dir, --install-dir, --no-user-cfg, --record, --egg-path, --prefix, --zip-ok, --install-layout, --script-dir, --version, --index-url, --always-copy, --quiet, --user, --no-find-links, --uninstall, --verbose, --find-links, --multi-version, --always-unzip, --no-deps, --build-directory, --help, --dry-run, --local-snapshots-ok, --upgrade, --optimize
+[1.235s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/sevnova/ros2_ws/build/isaac_visualization_bridge': CONDA_PROMPT_MODIFIER=(base) PYTHONPATH=/home/sevnova/ros2_ws/build/isaac_visualization_bridge/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/sevnova/ros2_ws/install/isaac_visualization_bridge/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/sevnova/ros2_ws/build/isaac_visualization_bridge/build --no-deps symlink_data
+[1.405s] DEBUG:colcon.colcon_core.task.python.build:Available setuptools 'develop' options: --exclude-scripts, --editable, --site-dirs, --allow-hosts, --force-installation-into-system-dir, --install-dir, --no-user-cfg, --record, --egg-path, --prefix, --zip-ok, --install-layout, --script-dir, --version, --index-url, --always-copy, --quiet, --user, --no-find-links, --uninstall, --verbose, --find-links, --multi-version, --always-unzip, --no-deps, --build-directory, --help, --dry-run, --local-snapshots-ok, --upgrade, --optimize
+[1.406s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/sevnova/ros2_ws/build/robot_state_machine': AMENT_PREFIX_PATH=/home/sevnova/ros2_ws/install/robot_msgs:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/sevnova/ros2_ws/install/robot_msgs:${CMAKE_PREFIX_PATH} CONDA_PROMPT_MODIFIER=(base) LD_LIBRARY_PATH=/home/sevnova/ros2_ws/install/robot_msgs/lib:${LD_LIBRARY_PATH} PYTHONPATH=/home/sevnova/ros2_ws/build/robot_state_machine/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/sevnova/ros2_ws/install/robot_state_machine/lib/python3.10/site-packages:/home/sevnova/ros2_ws/install/robot_msgs/local/lib/python3.10/dist-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/sevnova/ros2_ws/build/robot_state_machine/build --no-deps symlink_data
+[1.485s] Level 1:colcon.colcon_core.shell:create_environment_hook('robot_navigation', 'pythonpath_develop')
+[1.486s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/sevnova/ros2_ws/build/robot_navigation/share/robot_navigation/hook/pythonpath_develop.ps1'
+[1.486s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/sevnova/ros2_ws/build/robot_navigation' returned '0': CONDA_PROMPT_MODIFIER=(base) PYTHONPATH=/home/sevnova/ros2_ws/build/robot_navigation/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/sevnova/ros2_ws/install/robot_navigation/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/sevnova/ros2_ws/build/robot_navigation/build --no-deps symlink_data
+[1.486s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/sevnova/ros2_ws/build/robot_navigation/share/robot_navigation/hook/pythonpath_develop.dsv'
+[1.486s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/sevnova/ros2_ws/build/robot_navigation/share/robot_navigation/hook/pythonpath_develop.sh'
+[1.487s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_navigation' for CMake module files
+[1.487s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_navigation' for CMake config files
+[1.489s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_navigation/lib'
+[1.489s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_navigation/bin'
+[1.489s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_navigation/lib/pkgconfig/robot_navigation.pc'
+[1.489s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_navigation/lib/python3.10/site-packages'
+[1.489s] Level 1:colcon.colcon_core.shell:create_environment_hook('robot_navigation', 'pythonpath')
+[1.489s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/sevnova/ros2_ws/install/robot_navigation/share/robot_navigation/hook/pythonpath.ps1'
+[1.490s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/sevnova/ros2_ws/install/robot_navigation/share/robot_navigation/hook/pythonpath.dsv'
+[1.490s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/sevnova/ros2_ws/install/robot_navigation/share/robot_navigation/hook/pythonpath.sh'
+[1.490s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_navigation/bin'
+[1.490s] Level 1:colcon.colcon_core.environment:create_environment_scripts_only(robot_navigation)
+[1.490s] INFO:colcon.colcon_core.shell:Creating package script '/home/sevnova/ros2_ws/install/robot_navigation/share/robot_navigation/package.ps1'
+[1.491s] INFO:colcon.colcon_core.shell:Creating package descriptor '/home/sevnova/ros2_ws/install/robot_navigation/share/robot_navigation/package.dsv'
+[1.491s] INFO:colcon.colcon_core.shell:Creating package script '/home/sevnova/ros2_ws/install/robot_navigation/share/robot_navigation/package.sh'
+[1.491s] INFO:colcon.colcon_core.shell:Creating package script '/home/sevnova/ros2_ws/install/robot_navigation/share/robot_navigation/package.bash'
+[1.491s] INFO:colcon.colcon_core.shell:Creating package script '/home/sevnova/ros2_ws/install/robot_navigation/share/robot_navigation/package.zsh'
+[1.491s] Level 1:colcon.colcon_core.environment:create_file_with_runtime_dependencies(/home/sevnova/ros2_ws/install/robot_navigation/share/colcon-core/packages/robot_navigation)
+[1.495s] Level 1:colcon.colcon_core.shell:create_environment_hook('isaac_visualization_bridge', 'pythonpath_develop')
+[1.495s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/sevnova/ros2_ws/build/isaac_visualization_bridge' returned '0': CONDA_PROMPT_MODIFIER=(base) PYTHONPATH=/home/sevnova/ros2_ws/build/isaac_visualization_bridge/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/sevnova/ros2_ws/install/isaac_visualization_bridge/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/sevnova/ros2_ws/build/isaac_visualization_bridge/build --no-deps symlink_data
+[1.495s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/sevnova/ros2_ws/build/isaac_visualization_bridge/share/isaac_visualization_bridge/hook/pythonpath_develop.ps1'
+[1.495s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/sevnova/ros2_ws/build/isaac_visualization_bridge/share/isaac_visualization_bridge/hook/pythonpath_develop.dsv'
+[1.496s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/sevnova/ros2_ws/build/isaac_visualization_bridge/share/isaac_visualization_bridge/hook/pythonpath_develop.sh'
+[1.496s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/isaac_visualization_bridge' for CMake module files
+[1.497s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/isaac_visualization_bridge' for CMake config files
+[1.499s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/isaac_visualization_bridge/lib'
+[1.499s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/isaac_visualization_bridge/bin'
+[1.499s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/isaac_visualization_bridge/lib/pkgconfig/isaac_visualization_bridge.pc'
+[1.499s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/isaac_visualization_bridge/lib/python3.10/site-packages'
+[1.499s] Level 1:colcon.colcon_core.shell:create_environment_hook('isaac_visualization_bridge', 'pythonpath')
+[1.499s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/sevnova/ros2_ws/install/isaac_visualization_bridge/share/isaac_visualization_bridge/hook/pythonpath.ps1'
+[1.499s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/sevnova/ros2_ws/install/isaac_visualization_bridge/share/isaac_visualization_bridge/hook/pythonpath.dsv'
+[1.499s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/sevnova/ros2_ws/install/isaac_visualization_bridge/share/isaac_visualization_bridge/hook/pythonpath.sh'
+[1.500s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/isaac_visualization_bridge/bin'
+[1.500s] Level 1:colcon.colcon_core.environment:create_environment_scripts_only(isaac_visualization_bridge)
+[1.500s] INFO:colcon.colcon_core.shell:Creating package script '/home/sevnova/ros2_ws/install/isaac_visualization_bridge/share/isaac_visualization_bridge/package.ps1'
+[1.500s] INFO:colcon.colcon_core.shell:Creating package descriptor '/home/sevnova/ros2_ws/install/isaac_visualization_bridge/share/isaac_visualization_bridge/package.dsv'
+[1.500s] INFO:colcon.colcon_core.shell:Creating package script '/home/sevnova/ros2_ws/install/isaac_visualization_bridge/share/isaac_visualization_bridge/package.sh'
+[1.501s] INFO:colcon.colcon_core.shell:Creating package script '/home/sevnova/ros2_ws/install/isaac_visualization_bridge/share/isaac_visualization_bridge/package.bash'
+[1.501s] INFO:colcon.colcon_core.shell:Creating package script '/home/sevnova/ros2_ws/install/isaac_visualization_bridge/share/isaac_visualization_bridge/package.zsh'
+[1.501s] Level 1:colcon.colcon_core.environment:create_file_with_runtime_dependencies(/home/sevnova/ros2_ws/install/isaac_visualization_bridge/share/colcon-core/packages/isaac_visualization_bridge)
+[1.658s] Level 1:colcon.colcon_core.shell:create_environment_hook('robot_state_machine', 'pythonpath_develop')
+[1.658s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/sevnova/ros2_ws/build/robot_state_machine/share/robot_state_machine/hook/pythonpath_develop.ps1'
+[1.658s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/sevnova/ros2_ws/build/robot_state_machine' returned '0': AMENT_PREFIX_PATH=/home/sevnova/ros2_ws/install/robot_msgs:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/sevnova/ros2_ws/install/robot_msgs:${CMAKE_PREFIX_PATH} CONDA_PROMPT_MODIFIER=(base) LD_LIBRARY_PATH=/home/sevnova/ros2_ws/install/robot_msgs/lib:${LD_LIBRARY_PATH} PYTHONPATH=/home/sevnova/ros2_ws/build/robot_state_machine/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/sevnova/ros2_ws/install/robot_state_machine/lib/python3.10/site-packages:/home/sevnova/ros2_ws/install/robot_msgs/local/lib/python3.10/dist-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/sevnova/ros2_ws/build/robot_state_machine/build --no-deps symlink_data
+[1.658s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/sevnova/ros2_ws/build/robot_state_machine/share/robot_state_machine/hook/pythonpath_develop.dsv'
+[1.659s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/sevnova/ros2_ws/build/robot_state_machine/share/robot_state_machine/hook/pythonpath_develop.sh'
+[1.659s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_state_machine' for CMake module files
+[1.660s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_state_machine' for CMake config files
+[1.662s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_state_machine/lib'
+[1.662s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_state_machine/bin'
+[1.662s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_state_machine/lib/pkgconfig/robot_state_machine.pc'
+[1.662s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_state_machine/lib/python3.10/site-packages'
+[1.662s] Level 1:colcon.colcon_core.shell:create_environment_hook('robot_state_machine', 'pythonpath')
+[1.663s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/sevnova/ros2_ws/install/robot_state_machine/share/robot_state_machine/hook/pythonpath.ps1'
+[1.663s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/sevnova/ros2_ws/install/robot_state_machine/share/robot_state_machine/hook/pythonpath.dsv'
+[1.663s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/sevnova/ros2_ws/install/robot_state_machine/share/robot_state_machine/hook/pythonpath.sh'
+[1.663s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_state_machine/bin'
+[1.663s] Level 1:colcon.colcon_core.environment:create_environment_scripts_only(robot_state_machine)
+[1.663s] INFO:colcon.colcon_core.shell:Creating package script '/home/sevnova/ros2_ws/install/robot_state_machine/share/robot_state_machine/package.ps1'
+[1.664s] INFO:colcon.colcon_core.shell:Creating package descriptor '/home/sevnova/ros2_ws/install/robot_state_machine/share/robot_state_machine/package.dsv'
+[1.664s] INFO:colcon.colcon_core.shell:Creating package script '/home/sevnova/ros2_ws/install/robot_state_machine/share/robot_state_machine/package.sh'
+[1.664s] INFO:colcon.colcon_core.shell:Creating package script '/home/sevnova/ros2_ws/install/robot_state_machine/share/robot_state_machine/package.bash'
+[1.664s] INFO:colcon.colcon_core.shell:Creating package script '/home/sevnova/ros2_ws/install/robot_state_machine/share/robot_state_machine/package.zsh'
+[1.665s] Level 1:colcon.colcon_core.environment:create_file_with_runtime_dependencies(/home/sevnova/ros2_ws/install/robot_state_machine/share/colcon-core/packages/robot_state_machine)
+[1.665s] INFO:colcon.colcon_ros.task.ament_python.build:Building ROS package in '/home/sevnova/ros2_ws/src/robot_bringup' with build type 'ament_python'
+[1.665s] Level 1:colcon.colcon_core.shell:create_environment_hook('robot_bringup', 'ament_prefix_path')
+[1.666s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/sevnova/ros2_ws/install/robot_bringup/share/robot_bringup/hook/ament_prefix_path.ps1'
+[1.666s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/sevnova/ros2_ws/install/robot_bringup/share/robot_bringup/hook/ament_prefix_path.dsv'
+[1.666s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/sevnova/ros2_ws/install/robot_bringup/share/robot_bringup/hook/ament_prefix_path.sh'
+[1.666s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[1.666s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
+[1.815s] INFO:colcon.colcon_core.task.python.build:Building Python package in '/home/sevnova/ros2_ws/src/robot_bringup'
+[1.815s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[1.815s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
+[2.027s] DEBUG:colcon.colcon_core.task.python.build:Available setuptools commands: check, sdist, install, alias, easy_install, extract_messages, build, bdist_rpm, upload_docs, build_ext, install_data, bdist, install_scripts, saveopts, dist_info, egg_info, test, rotate, install_egg_info, bdist_wheel, clean, build_py, update_catalog, compile_catalog, install_lib, develop, build_scripts, install_headers, init_catalog, register, upload, build_clib, bdist_egg, bdist_dumb, symlink_data, setopt
+[2.192s] DEBUG:colcon.colcon_core.task.python.build:Available setuptools 'develop' options: --exclude-scripts, --editable, --site-dirs, --allow-hosts, --force-installation-into-system-dir, --install-dir, --no-user-cfg, --record, --egg-path, --prefix, --zip-ok, --install-layout, --script-dir, --version, --index-url, --always-copy, --quiet, --user, --no-find-links, --uninstall, --verbose, --find-links, --multi-version, --always-unzip, --no-deps, --build-directory, --help, --dry-run, --local-snapshots-ok, --upgrade, --optimize
+[2.193s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/sevnova/ros2_ws/build/robot_bringup': AMENT_PREFIX_PATH=/home/sevnova/ros2_ws/install/robot_state_machine:/home/sevnova/ros2_ws/install/robot_navigation:/home/sevnova/ros2_ws/install/robot_msgs:/home/sevnova/ros2_ws/install/isaac_visualization_bridge:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/sevnova/ros2_ws/install/robot_msgs:${CMAKE_PREFIX_PATH} CONDA_PROMPT_MODIFIER=(base) LD_LIBRARY_PATH=/home/sevnova/ros2_ws/install/robot_msgs/lib:${LD_LIBRARY_PATH} PYTHONPATH=/home/sevnova/ros2_ws/build/robot_bringup/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/sevnova/ros2_ws/install/robot_bringup/lib/python3.10/site-packages:/home/sevnova/ros2_ws/build/robot_state_machine:/home/sevnova/ros2_ws/install/robot_state_machine/lib/python3.10/site-packages:/home/sevnova/ros2_ws/build/robot_navigation:/home/sevnova/ros2_ws/install/robot_navigation/lib/python3.10/site-packages:/home/sevnova/ros2_ws/install/robot_msgs/local/lib/python3.10/dist-packages:/home/sevnova/ros2_ws/build/isaac_visualization_bridge:/home/sevnova/ros2_ws/install/isaac_visualization_bridge/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/sevnova/ros2_ws/build/robot_bringup/build --no-deps symlink_data
+[2.432s] Level 1:colcon.colcon_core.shell:create_environment_hook('robot_bringup', 'pythonpath_develop')
+[2.433s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/sevnova/ros2_ws/build/robot_bringup/share/robot_bringup/hook/pythonpath_develop.ps1'
+[2.433s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/sevnova/ros2_ws/build/robot_bringup' returned '0': AMENT_PREFIX_PATH=/home/sevnova/ros2_ws/install/robot_state_machine:/home/sevnova/ros2_ws/install/robot_navigation:/home/sevnova/ros2_ws/install/robot_msgs:/home/sevnova/ros2_ws/install/isaac_visualization_bridge:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/sevnova/ros2_ws/install/robot_msgs:${CMAKE_PREFIX_PATH} CONDA_PROMPT_MODIFIER=(base) LD_LIBRARY_PATH=/home/sevnova/ros2_ws/install/robot_msgs/lib:${LD_LIBRARY_PATH} PYTHONPATH=/home/sevnova/ros2_ws/build/robot_bringup/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/sevnova/ros2_ws/install/robot_bringup/lib/python3.10/site-packages:/home/sevnova/ros2_ws/build/robot_state_machine:/home/sevnova/ros2_ws/install/robot_state_machine/lib/python3.10/site-packages:/home/sevnova/ros2_ws/build/robot_navigation:/home/sevnova/ros2_ws/install/robot_navigation/lib/python3.10/site-packages:/home/sevnova/ros2_ws/install/robot_msgs/local/lib/python3.10/dist-packages:/home/sevnova/ros2_ws/build/isaac_visualization_bridge:/home/sevnova/ros2_ws/install/isaac_visualization_bridge/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/sevnova/ros2_ws/build/robot_bringup/build --no-deps symlink_data
+[2.433s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/sevnova/ros2_ws/build/robot_bringup/share/robot_bringup/hook/pythonpath_develop.dsv'
+[2.434s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/sevnova/ros2_ws/build/robot_bringup/share/robot_bringup/hook/pythonpath_develop.sh'
+[2.434s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_bringup' for CMake module files
+[2.434s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_bringup' for CMake config files
+[2.436s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_bringup/lib'
+[2.436s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_bringup/bin'
+[2.436s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_bringup/lib/pkgconfig/robot_bringup.pc'
+[2.436s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_bringup/lib/python3.10/site-packages'
+[2.436s] Level 1:colcon.colcon_core.shell:create_environment_hook('robot_bringup', 'pythonpath')
+[2.436s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/sevnova/ros2_ws/install/robot_bringup/share/robot_bringup/hook/pythonpath.ps1'
+[2.436s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/sevnova/ros2_ws/install/robot_bringup/share/robot_bringup/hook/pythonpath.dsv'
+[2.436s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/sevnova/ros2_ws/install/robot_bringup/share/robot_bringup/hook/pythonpath.sh'
+[2.437s] Level 1:colcon.colcon_core.environment:checking '/home/sevnova/ros2_ws/install/robot_bringup/bin'
+[2.437s] Level 1:colcon.colcon_core.environment:create_environment_scripts_only(robot_bringup)
+[2.437s] INFO:colcon.colcon_core.shell:Creating package script '/home/sevnova/ros2_ws/install/robot_bringup/share/robot_bringup/package.ps1'
+[2.437s] INFO:colcon.colcon_core.shell:Creating package descriptor '/home/sevnova/ros2_ws/install/robot_bringup/share/robot_bringup/package.dsv'
+[2.437s] INFO:colcon.colcon_core.shell:Creating package script '/home/sevnova/ros2_ws/install/robot_bringup/share/robot_bringup/package.sh'
+[2.437s] INFO:colcon.colcon_core.shell:Creating package script '/home/sevnova/ros2_ws/install/robot_bringup/share/robot_bringup/package.bash'
+[2.438s] INFO:colcon.colcon_core.shell:Creating package script '/home/sevnova/ros2_ws/install/robot_bringup/share/robot_bringup/package.zsh'
+[2.438s] Level 1:colcon.colcon_core.environment:create_file_with_runtime_dependencies(/home/sevnova/ros2_ws/install/robot_bringup/share/colcon-core/packages/robot_bringup)
+[2.438s] DEBUG:colcon.colcon_parallel_executor.executor.parallel:closing loop
+[2.439s] DEBUG:colcon.colcon_parallel_executor.executor.parallel:loop closed
+[2.439s] DEBUG:colcon.colcon_parallel_executor.executor.parallel:run_until_complete finished with '0'
+[2.439s] DEBUG:colcon.colcon_core.event_reactor:joining thread
+[2.446s] INFO:colcon.colcon_core.plugin_system:Skipping extension 'colcon_notification.desktop_notification.terminal_notifier': Not used on non-Darwin systems
+[2.446s] INFO:colcon.colcon_core.plugin_system:Skipping extension 'colcon_notification.desktop_notification.win32': Not used on non-Windows systems
+[2.446s] INFO:colcon.colcon_notification.desktop_notification:Sending desktop notification using 'notify2'
+[2.551s] DEBUG:colcon.colcon_core.event_reactor:joined thread
+[2.551s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/sevnova/ros2_ws/install/local_setup.ps1'
+[2.552s] INFO:colcon.colcon_core.shell:Creating prefix util module '/home/sevnova/ros2_ws/install/_local_setup_util_ps1.py'
+[2.553s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/sevnova/ros2_ws/install/setup.ps1'
+[2.555s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/sevnova/ros2_ws/install/local_setup.sh'
+[2.555s] INFO:colcon.colcon_core.shell:Creating prefix util module '/home/sevnova/ros2_ws/install/_local_setup_util_sh.py'
+[2.555s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/sevnova/ros2_ws/install/setup.sh'
+[2.557s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/sevnova/ros2_ws/install/local_setup.bash'
+[2.557s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/sevnova/ros2_ws/install/setup.bash'
+[2.558s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/sevnova/ros2_ws/install/local_setup.zsh'
+[2.559s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/sevnova/ros2_ws/install/setup.zsh'

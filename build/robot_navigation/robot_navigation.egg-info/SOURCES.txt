@@ -1,0 +1,15 @@
+package.xml
+setup.cfg
+setup.py
+launch/cmd_vel_bridge.launch.py
+resource/robot_navigation
+robot_navigation/__init__.py
+robot_navigation/cmd_vel_to_alfa_node.py
+robot_navigation/nav_goal_sender.py
+robot_navigation.egg-info/PKG-INFO
+robot_navigation.egg-info/SOURCES.txt
+robot_navigation.egg-info/dependency_links.txt
+robot_navigation.egg-info/entry_points.txt
+robot_navigation.egg-info/requires.txt
+robot_navigation.egg-info/top_level.txt
+robot_navigation.egg-info/zip-safe

@@ -1,0 +1,5 @@
+[console_scripts]
+alfa_task_state_machine_node = robot_state_machine.alfa_task_state_machine_node:main
+alfa_truth_demo_state_machine_node = robot_state_machine.alfa_truth_demo_state_machine_node:main
+state_summary_node = robot_state_machine.state_summary_node:main
+

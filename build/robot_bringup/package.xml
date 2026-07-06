@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>robot_bringup</name>
+  <version>0.1.0</version>
+  <description>Top-level bringup for WSL ROS2 to Windows Isaac Sim validation.</description>
+  <maintainer email="dev@sevnova.local">sevnova</maintainer>
+  <license>Proprietary</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>fsm_config</exec_depend>
+  <exec_depend>isaac_visualization_bridge</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>robot_navigation</exec_depend>
+  <exec_depend>robot_state_machine</exec_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

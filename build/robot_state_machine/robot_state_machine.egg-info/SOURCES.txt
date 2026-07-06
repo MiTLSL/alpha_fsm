@@ -1,0 +1,15 @@
+package.xml
+setup.cfg
+setup.py
+resource/robot_state_machine
+robot_state_machine/__init__.py
+robot_state_machine/alfa_task_state_machine_node.py
+robot_state_machine/alfa_truth_demo_state_machine_node.py
+robot_state_machine/state_summary_node.py
+robot_state_machine.egg-info/PKG-INFO
+robot_state_machine.egg-info/SOURCES.txt
+robot_state_machine.egg-info/dependency_links.txt
+robot_state_machine.egg-info/entry_points.txt
+robot_state_machine.egg-info/requires.txt
+robot_state_machine.egg-info/top_level.txt
+robot_state_machine.egg-info/zip-safe

@@ -1,0 +1,16 @@
+running develop
+running egg_info
+writing robot_state_machine.egg-info/PKG-INFO
+writing dependency_links to robot_state_machine.egg-info/dependency_links.txt
+writing entry points to robot_state_machine.egg-info/entry_points.txt
+writing requirements to robot_state_machine.egg-info/requires.txt
+writing top-level names to robot_state_machine.egg-info/top_level.txt
+reading manifest file 'robot_state_machine.egg-info/SOURCES.txt'
+writing manifest file 'robot_state_machine.egg-info/SOURCES.txt'
+running build_ext
+Creating /home/sevnova/ros2_ws/install/robot_state_machine/lib/python3.10/site-packages/robot-state-machine.egg-link (link to .)
+Installing alfa_task_state_machine_node script to /home/sevnova/ros2_ws/install/robot_state_machine/lib/robot_state_machine
+Installing state_summary_node script to /home/sevnova/ros2_ws/install/robot_state_machine/lib/robot_state_machine
+
+Installed /home/sevnova/ros2_ws/build/robot_state_machine
+running symlink_data
