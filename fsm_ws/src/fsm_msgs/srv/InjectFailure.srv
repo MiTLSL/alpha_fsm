@@ -1,0 +1,7 @@
+string failure_name
+float32 duration_sec
+string params_json
+---
+bool accepted
+string message
+string current_failure

@@ -1,0 +1,41 @@
+# version: 1.0.0
+# last_updated: 2026-05-23
+/**:
+  ros__parameters:
+    fsm:
+      tick_rate_hz: 20
+      state_broadcast_rate_hz: 1
+      node_init_timeout_sec: 30
+      node_shutdown_timeout_sec: 5
+
+      state_timeouts:
+        RobotSystemFSM_BOOTING: 30
+        RobotSystemFSM_SELF_CHECK: 20
+        RobotSystemFSM_PAUSED: 300
+        TaskFSM_RUN_TASK: 1800
+        WallDestackingFSM_NAVIGATE_TO_OBSERVATION_POSE: 60
+        WallDestackingFSM_NAVIGATE_TO_PHASE_WORKPOSE: 60
+        WallDestackingFSM_RUN_WALL_MAPPING: 30
+        WallDestackingFSM_RUN_PHASE_PERCEPTION: 20
+        WallDestackingFSM_WAIT_PAIR_GRASP_RESULT: 120
+        WallDestackingFSM_VERIFY_TASK_COMPLETE: 30
+        WallDestackingFSM_WALL_ERROR_HANDLE: 30
+        WallMappingFSM_COLLECT_FRAMES: 3.5
+        PhasePerceptionFSM_COLLECT_LOCAL_FRAMES: 2.0
+        WallRecoveryFSM_WAIT_MANUAL_RECOVERY: 600
+
+      recovery_max_attempts:
+        RETRY_CURRENT_STATE: 3
+        REPLAN: 2
+        REPERCEPTION: 3
+        SWITCH_TARGET: 5
+        MOVE_BASE: 2
+        RETREAT_SAFE: 1
+        RELOCALIZE: 2
+        REBUILD_GRID: 2
+        WAIT_MANUAL_RECOVERY: 1
+        ABORT_TASK: 1
+        E_STOP: 1
+
+      action_send_goal_timeout_sec: 2
+      action_get_result_timeout_sec: 120

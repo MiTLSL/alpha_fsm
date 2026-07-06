@@ -1,0 +1,81 @@
+# version: 0.1.0
+# last_updated: 2026-06-03
+/**:
+  ros__parameters:
+    sim:
+      enabled: false
+      time_scale: 1.0
+
+      scene:
+        wall_count: 1
+        active_wall_index: 0
+        rows: 5
+        cols: 5
+        source_frame: "body"
+        grid_origin_map:
+          x: 0.60
+          y: 0.80
+          z: 1.80
+          yaw: 0.0
+        wall_spacing_y: 2.50
+        box_size:
+          length: 0.40
+          width: 0.40
+          height: 0.40
+        missing_slots: []
+
+      sensor:
+        publish_rate_hz: 10.0
+        output_mode: "adapter_input"       # adapter_input | adapter_bypass
+        confidence: 0.95
+        face_inlier_count: 32
+
+      fake_base:
+        enabled: false
+        odom_frame: "odom"
+        alignment_topic: "/sim/fake_base_alignment"
+        nav2_goal_duration_sec: 0.30
+        integration_rate_hz: 50.0
+        amcl_publish_rate_hz: 20.0
+        initial_position_offset_m: 0.10
+        initial_yaw_offset_rad: 0.0873
+        desired_distance_to_wall: 0.60
+        desired_yaw_to_wall: 0.0
+        command_deadband:
+          linear_x: 0.0005
+          angular_z: 0.0005
+
+      frames:
+        map: "map"
+        base_link: "base_link"
+        body: "body"
+        camera_link: "camera_link"
+        d2_base_link: "2d_base_link"
+
+      debug:
+        publish_markers: true
+        marker_topic: "/sim/markers"
+        publish_private_topics: true
+
+      isaac:
+        enabled: false
+        use_sim_time: true
+
+        perception:
+          # param_truth: 不依赖 Isaac SDK，用参数或 YAML 描述箱体真值；
+          # isaac_sdk: 后续接 Isaac Python/ROS2 bridge 后读取 USD prim。
+          source_mode: "param_truth"
+          publish_rate_hz: 10.0
+          scene_truth_file: ""
+          boxes_json: ""
+          synthetic_latency_ms: 0.0
+          view:
+            max_distance_m: 3.0
+            horizontal_fov_rad: 2.2
+            z_min: -0.2
+            z_max: 2.8
+
+        chassis:
+          initial_enabled: true
+          initial_fault: false
+          status_publish_rate_hz: 10.0

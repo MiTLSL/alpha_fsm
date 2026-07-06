@@ -1,0 +1,11 @@
+std_msgs/Header header
+bool camera_ok
+bool lidar_ok
+bool yolo_ok
+bool tf_ok
+float32 detection_publish_rate_hz
+float32 camera_frame_age_ms
+float32 lidar_frame_age_ms
+float32 upstream_result_age_ms
+uint16 error_code
+string details_json

@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>fsm_config</name>
+  <version>1.0.0</version>
+  <description>FSM shared parameters and launch profiles.</description>
+  <maintainer email="dev@sevnova.local">sevnova_fsm</maintainer>
+  <license>Proprietary</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>task_manager</exec_depend>
+  <exec_depend>wall_destacking_strategy</exec_depend>
+  <exec_depend>navigation_manager</exec_depend>
+  <exec_depend>pair_grasp_execution</exec_depend>
+  <exec_depend>perception_adapter</exec_depend>
+  <exec_depend>vacuum_io</exec_depend>
+  <exec_depend>safety_monitor</exec_depend>
+  <exec_depend>fsm_test</exec_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

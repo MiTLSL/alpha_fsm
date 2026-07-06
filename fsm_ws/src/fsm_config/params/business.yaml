@@ -1,0 +1,203 @@
+# version: 1.0.0
+# last_updated: 2026-05-23
+# changelog:
+#   1.0.0 初版，占位值用于 M0/M1 mock。
+/**:
+  ros__parameters:
+    business:
+      box_size:
+        length: 0.40
+        width: 0.40
+        height: 0.40
+
+      grid_shape:
+        rows: 5
+        cols: 5
+
+      left_phase_cols: [0, 1, 2]
+      right_phase_cols: [2, 3, 4]
+      max_adjacent_column_height_delta: 1
+
+      match_tolerance:
+        y: 0.15
+        z: 0.15
+
+      empty_confirm_frames: 5
+      empty_confirm_window_sec: 3.0
+      max_retry_per_slot: 3
+      allow_single_arm_grasp: true
+
+      observation_pose:
+        x: 0.0
+        y: 0.0
+        z: 0.0
+        yaw: 0.0
+
+      left_phase_workpose:
+        x: 0.0
+        y: 0.30
+        z: 0.0
+        yaw: 0.0
+
+      right_phase_workpose:
+        x: 0.0
+        y: -0.30
+        z: 0.0
+        yaw: 0.0
+
+      desired_distance_to_wall: 0.60
+      desired_yaw_to_wall: 0.0
+      fine_alignment_tolerance:
+        position: 0.02
+        yaw: 0.02
+
+      fixed_place_pose:
+        x: 0.50
+        y: 0.0
+        z: 0.80
+        qx: 0.0
+        qy: 0.0
+        qz: 0.0
+        qw: 1.0
+
+      left_arm_workspace:
+        x_min: 0.30
+        x_max: 0.90
+        y_min: -0.10
+        y_max: 0.60
+        z_min: 0.30
+        z_max: 1.80
+
+      right_arm_workspace:
+        x_min: 0.30
+        x_max: 0.90
+        y_min: -0.60
+        y_max: 0.10
+        z_min: 0.30
+        z_max: 1.80
+
+      mapping_window:
+        frames: 10
+        timeout_sec: 3.0
+        min_valid_detections: 8
+
+      local_window:
+        frames: 5
+        timeout_sec: 1.5
+
+      detection_filter:
+        confidence_min: 0.5
+        size_tolerance: 0.10
+        class_label: "box"
+
+      perception_adapter:
+        publish_rate_hz: 10.0
+        camera_timeout_ms: 500
+        lidar_timeout_ms: 500
+        result_timeout_ms: 1000
+        tf_timeout_ms: 200
+        min_face_inlier_count: 20
+        box_center_offset_sign: -1.0
+
+      tf_static_fallback:
+        enabled: true
+        allowed_source_frames: ["body", "camera_link", "depth_camera_link", "camera_color_optical_frame"]
+
+      navigation_manager:
+        backend_mode: "fake_real"
+        nav2_client_wait_sec: 2.0
+        service_timeout_sec: 2.0
+        require_lifecycle_active: true
+        require_amcl_pose: true
+        require_chassis_ready: false
+        amcl_timeout_sec: 1.5
+        amcl_max_covariance: 0.25
+        chassis_status_timeout_sec: 1.0
+        estop_release_repeats: 3
+        fine_align_stub_success: true
+
+      fine_alignment:
+        timeout_sec: 15.0
+        retry_limit: 1
+        pass_frames: 5
+        dist_tolerance: 0.02
+        yaw_tolerance: 0.05
+        max_linear_x: 0.05
+        max_angular_z: 0.20
+        min_linear_x: 0.0
+        min_angular_z: 0.0
+        linear_gain: 0.80
+        angular_gain: 1.50
+        min_detection_confidence: 0.50
+        feedback_timeout_ms: 1000
+        stop_cmd_repeats: 2
+
+      vacuum:
+        attach_threshold_kpa: -50.0
+        hold_ms: 150
+        buildup_timeout_ms: 800
+        sensor_timeout_ms: 200
+        pressure_publish_rate_hz: 20.0
+        mock_buildup_time_ms: 150
+        mock_release_time_ms: 100
+        hold_on_estop: true
+        release_on_cancel: false
+
+      pair_grasp_execution:
+        backend_mode: "dry_run"
+        fake_failure_mode: "NONE"
+        stage_delay_sec: 0.03
+        moveit_action_wait_sec: 2.0
+        moveit_planning_group: "dual_v5_arm_with_base"
+        left_tip_link: "left_v5_tool0"
+        right_tip_link: "right_v5_tool0"
+        moveit_allowed_planning_time_sec: 5.0
+        moveit_num_planning_attempts: 10
+        moveit_velocity_scaling: 0.30
+        moveit_acceleration_scaling: 0.20
+        moveit_position_tolerance: 0.015
+        moveit_orientation_tolerance: 0.08
+        input_pose_represents_box_center: true
+        contact_standoff_x: 0.0
+        pregrasp_offset_x: 0.10
+        extract_offset_x: 0.10
+        retreat_offset_x: 0.10
+        place_y_separation: 0.40
+        attach_box_to_planning_scene: true
+        attached_box_weight_kg: 2.0
+        attached_box_touch_links: []
+        self_collision:
+          check_current_state: true
+          require_dual_arm_group: true
+          required_group_name: "dual_v5_arm_with_base"
+          joint_state_max_age_sec: 1.0
+          state_validity_timeout_sec: 1.0
+        collision_scene:
+          manage_world_objects: true
+          remove_target_box_objects: false
+          enable_container_obstacle: false
+          enable_static_box_wall_obstacles: false
+          static_box_obstacle_inset: 0.002
+          static_box_wall_margin: 0.0
+          container:
+            center_x: 0.0
+            center_y: 0.0
+            width: 2.2
+            height: 2.4
+            length: 8.0
+            wall_thickness: 0.03
+            floor_z: 0.0
+        planning_workspace:
+          x_min: -1.0
+          x_max: 1.5
+          y_min: -1.0
+          y_max: 1.0
+          z_min: 0.0
+          z_max: 2.0
+        skip_vacuum_check: true
+
+      max_walls: 0
+      max_task_duration_sec: 1800
+      dual_arm_min_y_separation: 0.05
+      dual_arm_min_xz_aabb_clear: 0.05
+      arm_assign_ambiguous_y_diff: 0.05

@@ -1,0 +1,12 @@
+std_msgs/Header header
+string node_name
+string fsm_name
+string event_type
+string from_state
+string to_state
+string transition
+string task_id
+float32 duration_ms
+uint16 error_code
+uint8 retry_count
+string extra_json

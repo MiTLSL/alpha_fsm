@@ -1,0 +1,13 @@
+std_msgs/Header header
+string node_name
+string fsm_name
+string current_state
+string parent_fsm
+string parent_state
+string task_id
+uint8 wall_index
+uint8 phase
+float32 state_elapsed_sec
+uint8 retry_count
+uint16 last_error_code
+string extra_json

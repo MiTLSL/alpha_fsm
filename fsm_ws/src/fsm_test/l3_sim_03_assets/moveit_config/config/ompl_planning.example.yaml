@@ -1,0 +1,9 @@
+# Replace with the real OMPL planning config.
+#
+# Example shape only:
+#
+# planner_configs:
+#   RRTConnectkConfigDefault:
+#     type: geometric::RRTConnect
+# planning_pipelines:
+#   pipeline_names: ["ompl"]
